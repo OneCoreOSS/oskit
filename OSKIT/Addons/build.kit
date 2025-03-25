@@ -1,0 +1,134 @@
+##################################
+# DO NOT RUN THIS SCRIPT DIRECTLY
+# USE WITH OSKIT.
+##################################
+
+declare -a ArrMedia
+declare -a ArrSKUS
+
+GenerateBldVer(){
+	MAJORVER=$(cat $OSK_DATA/OSInfo/SKUMAJOR.INF)
+	MINORVER=$(cat $OSK_DATA/OSInfo/SKUMINOR.INF)
+	SEMESTER=$(cat $OSK_DATA/OSInfo/Semester)
+	ALLVER=$(TZ=UTC-3 date +"$MAJORVER.$MINORVER-$1.%y%m%d")
+	printf "$ALLVER"
+}
+
+GenerateBldInfo(){
+	MAJORVER=$(cat $OSK_DATA/OSInfo/SKUMAJOR.INF)
+	MINORVER=$(cat $OSK_DATA/OSInfo/SKUMINOR.INF)
+	SEMESTER=$(cat $OSK_DATA/OSInfo/Semester)
+	ALLVER=$(TZ=UTC-3 date +"$MAJORVER.$MINORVER-$1.%y%m%d")
+	CMPInfo=""
+	if [ -f "$OSK_ROOT/SKUS/SKUNames/$1" ]; then
+		CMPInfo=$(TZ=UTC-3 date +" -- OneCore Linux $SEMESTER\n\n ($ALLVER) \n Compiled %d %b %H:%M:%S %Y UTC\n SKU (Edition): $(cat $OSK_ROOT/SKUS/SKUNames/$1)\n" && printf '\n')
+	else
+		CMPInfo=$(TZ=UTC-3 date +" -- OneCore Linux $SEMESTER\n\n ($ALLVER) \n Compiled %d %b %H:%M:%S %Y UTC\n SKU (Edition): $1\n" && printf '\n')
+	fi
+	printf "$CMPInfo"
+}
+
+for arg in "$@"; do
+    case $arg in
+        -media:*)
+            ArrMedia=($(echo "${arg#-media:}" | tr ',' ' '))
+            ;;
+        -skus:*)
+            ArrSKUS=($(echo "${arg#-skus:}" | tr ',' ' '))
+            ;;
+    esac
+done
+
+if [ ${#ArrMedia[@]} -eq 0 ] || [ ${#ArrSKUS[@]} -eq 0 ]; then
+	echo "Please specify both Media and SKU."
+else
+	for media in "${ArrMedia[@]}"; do
+		if [ $media == "cdrom" ]; then
+			echo ":: Building ISO"
+			if [ ${ArrSKUS[0]} == "all" ]; then
+				echo ":: Building ALL SKUs"
+				ArrSKUS=()
+				for dir in "$OSK_ROOT/SKUS/"*/; do
+					dir_name=$(basename "$dir")
+					if [ "$dir_name" != "SKUNames" ]; then
+						ArrSKUS+=("$dir_name")
+					fi
+				done
+			fi
+			for sku in "${ArrSKUS[@]}"; do
+				if [ ! -d "$OSK_ROOT/SKUS/$sku" ]; then
+					echo "!! SKU '$sku' does not exists"
+					exit 1
+				fi
+				echo ":: Building SKU: $sku"
+				BLDInfo=$(GenerateBldInfo $sku)
+				BLDVer=$(GenerateBldVer $sku)
+				echo ":: Creating temp initrd dir (Requires Root)"
+				sudo cp -r "$OSK_ROOT/BUILD/ONECORE" "$OSK_ROOT/BUILD/ONECORE0"
+				echo ":: Copying SKU Rootfs (Requires Root)"
+				sudo cp -r "$OSK_ROOT/SKUS/$sku/ROOTFS"/* "$OSK_ROOT/BUILD/ONECORE0/"
+				echo ":: Generating Build Info (Requires Root)"
+				sudo cp "$OSK_DATA/OSInfo/Semester" "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/"
+				sudo cp "$OSK_DATA/OSInfo/SKUMAJOR.INF" "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/"
+				sudo cp "$OSK_DATA/OSInfo/SKUMINOR.INF" "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/"
+				sudo echo "$BLDInfo" > /tmp/.osinfo
+				sudo echo "$BLDVer" > /tmp/.osbld
+				sudo mv /tmp/.osinfo "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/OSInfo"
+				sudo mv /tmp/.osbld "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/OSBld"
+				sudo ln -s /etc/OneCore/OSInfo "$OSK_ROOT/BUILD/ONECORE0/etc/OneCoreBLD"
+				if [ -d "$OSK_ROOT/SKUS/$sku/FLIGHT/TCE" ]; then
+					echo ":: Deploying TCE Packages (May take a while, Requires Root)"
+					for TCZ in "$OSK_ROOT"/SKUS/$sku/FLIGHT/TCE/*.tcz; do
+						mkdir -p "/tmp/TCEFLY"
+						printf "[TCEDeploy] Deploying '$TCZ'       \r"
+						sudo mount "$TCZ" "/tmp/TCEFLY"
+						sudo cp -r /tmp/TCEFLY/* "$OSK_ROOT/BUILD/ONECORE0/"
+						sudo umount "/tmp/TCEFLY"
+					done
+					echo
+				fi
+				if [ -d "$OSK_ROOT/SKUS/$sku/POSTBUILD/" ]; then
+					echo ":: Running PostBuild scripts"
+					for PbldScript in "$OSK_ROOT/SKUS/$sku/"POSTBUILD/*.pbldsh; do
+						OSKIT_SKU="$sku" ROOTFS="$OSK_ROOT/BUILD/ONECORE0" sh "$PbldScript"
+					done
+				fi
+				echo ":: Fixing permissions"
+				sudo chown -R 1000 "$OSK_ROOT/BUILD/ONECORE0/tmp/"
+				sudo chown -R 1000 "$OSK_ROOT/BUILD/ONECORE0/mnt/"
+				sudo chmod +x "$OSK_ROOT/BUILD/ONECORE0/"bin/*
+				sudo chmod +x "$OSK_ROOT/BUILD/ONECORE0/usr/"bin/*
+				sudo chmod +x "$OSK_ROOT/BUILD/ONECORE0/usr/local/"bin/*
+				echo ":: Creating Initrd"
+				pushd "$OSK_ROOT/BUILD/ONECORE0/"
+				mkdir -p "$OSK_ROOT/OUTPUT"
+				sudo find | sort | sudo cpio -o -H newc | gzip -c > "$OSK_ROOT/OUTPUT/onecore64.gz"
+				popd
+				echo ":: Preparing ISO Dir (Requires Root)"
+				sudo rm -rf /tmp/ISORW
+				sudo mkdir -p /tmp/ISORW/boot
+				sudo mkdir -p /tmp/ISORW/boot/data
+				sudo cp "$OSK_DATA/Patches/efiboot.img" "/tmp/ISORW/boot.img"
+				sudo cp "$OSK_DATA/Patches/splash" "/tmp/ISORW/boot/data/splash"
+				sudo echo "$BLDInfo" > /tmp/.osinfo
+				sudo mv /tmp/.osinfo "/tmp/ISORW/boot/data/osinfo"
+				sudo cp "$OSK_DATA/OSInfo/Kernel" "/tmp/ISORW/boot/vmlinuz"
+				sudo cp "$OSK_ROOT/OUTPUT/onecore64.gz" "/tmp/ISORW/boot/onecore64.gz"
+				sudo cp -r "$OSK_DATA/Patches/isolinux" "/tmp/ISORW/boot/"
+				sudo cp -r "$OSK_DATA/Patches/grub" "/tmp/ISORW/boot/"
+				if [ -d "$OSK_ROOT/SKUS/$sku/ISOEXTRA/" ]; then
+					echo ":: Copying Extra files to ISO"
+					sudo cp -r "$OSK_ROOT/SKUS/$sku/"ISOEXTRA/* "/tmp/ISORW/"
+				fi
+				echo ":: Building ISO"
+				sudo xorriso -as mkisofs -isohybrid-mbr /usr/lib/syslinux/bios/isohdpfx.bin -c boot/isolinux/boot.cat -b boot/isolinux/isolinux.bin  -no-emul-boot -boot-load-size 4 -boot-info-table -eltorito-alt-boot -e boot.img -no-emul-boot -isohybrid-gpt-basdat -hide boot.img -o "$OSK_ROOT/OUTPUT/OCL-$(cat $OSK_DATA/OSInfo/Semester)-$sku.iso" /tmp/ISORW/
+				echo ":: Removing temporary directories"
+				sudo rm -rf "/tmp/ISORW"
+				sudo rm -rf "/tmp/TCEFLY"
+				sudo rm -rf "$OSK_ROOT/BUILD/ONECORE0"
+				echo ":: $sku was built"
+			done
+			echo $((1+$(cat "$OSK_DATA/OSInfo/SKUMINOR.INF"))) > "$OSK_DATA/OSInfo/SKUMINOR.INF"
+		fi
+	done
+fi

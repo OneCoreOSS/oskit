@@ -1,0 +1,10 @@
+NAME=OneCore
+VERSION="15.0"
+ID=onecore
+VERSION_ID=15.0
+PRETTY_NAME="OneCore Linux 25H1"
+ANSI_COLOR="0;34"
+CPE_NAME="cpe:/o:tinycore:tinycore_linux:15.0"
+HOME_URL="http://tinycorelinux.net/"
+SUPPORT_URL="http://forum.tinycorelinux.net/"
+BUG_REPORT_URL="http://forum.tinycorelinux.net/"

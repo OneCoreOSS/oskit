@@ -1,0 +1,5 @@
+Usage:
+	osmanage createsku <sku> <sku name>
+
+	example:
+		osmanage createsku rel_main "Release"

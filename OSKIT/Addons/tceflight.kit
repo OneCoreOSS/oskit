@@ -1,0 +1,68 @@
+#!/bin/sh
+TCEURL=http://tinycorelinux.net/15.x/x86_64/tcz
+
+if [ -z "$2" ]; then
+	cat $OSK_DATA/UserHelp/tceflight.usage
+	exit 1
+fi
+
+SKU=$1
+FLIGHTREQ=$2
+
+if [ ! -d "$OSK_ROOT/SKUS/$SKU" ]; then
+	echo "!! SKU '$SKU' does not exists"
+	exit 1
+fi
+DEPARR=("$FLIGHTREQ.tcz")
+
+mkdir -p "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE"
+if [ -f "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE/FLIGHTED.LST" ]; then
+	for TCZ in $(cat "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE/FLIGHTED.LST"); do
+		DEPARR+=$TCZ
+	done
+else
+	touch "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE/FLIGHTED.LST"
+fi
+
+TEMPDIR="$OSK_ROOT/BUILD/TEMP"
+
+UpdDeps(){
+	DEPCODE=$(curl -o /dev/null -s -w "%{http_code}\n" $TCEURL/$1.dep)
+	if [ $DEPCODE = "404" ]; then
+		printf "\n[TCEFlight] Dependency '$1' has reached end of dependency         \r"
+		return
+	fi
+	if [ $DEPCODE = "200" ]; then
+		printf "[TCEFlight] Dependencies for '$1' found; adding to list           \r"
+		DEPS=$(curl -Lks $TCEURL/$1.dep)
+		echo "$DEPS" >> "$TEMPDIR/deps.lst"
+		for dep in $DEPS; do
+			for exdep in "${DEPARR[@]}"; do
+				if [[ "$exdep" =~ "$dep" ]]; then
+					return # Dependency is already known/downloaded. Skip.
+				fi
+			done
+			if ! echo "$dep" | grep -q "KERNEL"; then
+				DEPARR+=$dep
+				UpdDeps $dep
+			fi
+		done
+	fi
+}
+echo ":: Building dependency list for $FLIGHTREQ.tcz"
+echo "$FLIGHTREQ.tcz" > "$TEMPDIR/deps.lst"
+mkdir -p "$TEMPDIR"
+UpdDeps "$FLIGHTREQ.tcz"
+echo
+echo ":: Removing duplicates in dependency list"
+NEWLST=$(awk '!seen[$0]++' "$TEMPDIR/deps.lst" | sed ':a;N;$!ba;s/\n/ /g' | sed 's/  //g' | sed 's/ /\n/g')
+echo $NEWLST > "$TEMPDIR/deps.lst"
+echo ":: Downloading Packages"
+for TCZ in $(cat "$TEMPDIR/deps.lst"); do
+	printf "[TCEFlight] Downloading package '$TCZ'              \r"
+	curl -Lks $TCEURL/$TCZ -o "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE/$TCZ"
+done
+echo
+echo ":: Adding packages to success flights list"
+ls "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE"/*.tcz > "$OSK_ROOT/SKUS/$SKU/FLIGHT/TCE/FLIGHTED.LST"
+echo ":: Done"

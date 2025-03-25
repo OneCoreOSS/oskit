@@ -1,0 +1,24 @@
+##################################
+# DO NOT RUN THIS SCRIPT DIRECTLY
+# USE WITH OSKIT.
+##################################
+
+# Example : osmanage createsku rs_main2 "Main Release 2"
+if [ "$#" -ne 3 ]; then
+	cat $OSK_DATA/UserHelp/osrebase.usage
+	exit 1
+fi
+
+SKU="$2"
+SKU_NAME="$3"
+
+if [ ! -d "$OSK_ROOT/SKUS/mainline" ]; then
+	echo "Error: Directory $OSK_ROOT/SKUS/mainline does not exist."
+	exit 1
+fi
+
+echo ":: Writing SKU Name"
+echo "$SKU_NAME" > "$OSK_ROOT/SKUS/SKUNames/$SKU"
+echo ":: Creating "$SKU" from Mainline"
+cp -r "$OSK_ROOT/SKUS/mainline" "$OSK_ROOT/SKUS/$SKU"
+echo ":: Done !"

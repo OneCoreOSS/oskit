@@ -1,0 +1,54 @@
+##################################
+# DO NOT RUN THIS SCRIPT DIRECTLY
+# USE WITH OSKIT.
+##################################
+
+URL="http://tinycorelinux.net"
+
+declare -A VALIDTCL=(
+    ["latest"]="15.x"
+    ["TCL15"]="15.x"
+    ["TCL14"]="14.x"
+)
+
+if [ -z "$1" ]; then
+	cat $OSK_DATA/UserHelp/osrebase.usage
+	exit 1
+fi
+
+
+if [[ -v "VALIDTCL[$1]" ]]; then
+	DOWNURL="$URL/${VALIDTCL[$1]}/x86_64/release/distribution_files"
+	echo ":: Creating directories"
+	mkdir -p "$OSK_ROOT/BUILD/ONECORE"
+	mkdir -p "$OSK_ROOT/BUILD/TEMP"
+	echo ":: Downloading TinyCore Initrd"
+	curl -Lk "$DOWNURL/corepure64.gz" -o "$OSK_ROOT/BUILD/TEMP/initrd.gz"
+	echo ":: Extracting TinyCore Stage 1"
+	gunzip "$OSK_ROOT/BUILD/TEMP/initrd.gz"
+	echo ":: Extracting TinyCore Stage 2 (Requires Root)"
+	pushd "$OSK_ROOT/BUILD/ONECORE"
+	sudo cpio -id < "$OSK_ROOT/BUILD/TEMP/initrd"
+	if [ ! $? -eq 0 ]; then
+		echo "!! Failed to Extract Stage 2"
+                exit 1
+        fi
+	echo ":: Creating Directories (Requires root)"
+	sudo mkdir -p "$OSK_ROOT/BUILD/ONECORE/etc/OneCore"
+	sudo mkdir -p "$OSK_ROOT/BUILD/ONECORE/etc/telemetry"
+	echo ":: Applying OneCore Linux patches (Requires Root)"
+	sudo cp -r "$OSK_DATA/Patches/rawfs/"* "$OSK_ROOT/BUILD/ONECORE/"
+	popd
+	echo ":: Replacing TinyCore kernel modules with OneCore kernel modules"
+	sudo rm -rf "$OSK_ROOT/BUILD/ONECORE/lib/modules/"
+	sudo cp -r "$OSK_DATA/Patches/modules" "$OSK_ROOT/BUILD/ONECORE/lib/modules"
+	echo ":: Registering Mainline SKU"
+	mkdir -p "$OSK_ROOT/SKUS"
+	mkdir -p "$OSK_ROOT/SKUS/SKUNames"
+	echo "Mainline" > "$OSK_ROOT/SKUS/SKUNames/mainline"
+	mkdir -p "$OSK_ROOT/SKUS/mainline"
+	cp -r "$OSK_DATA/Patches/rawfs" "$OSK_ROOT/SKUS/mainline/ROOTFS"
+	echo "OneCore Linux has been rebased."
+else
+	echo "TinyCore version '$1' not found"
+fi
