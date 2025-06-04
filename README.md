@@ -100,4 +100,4 @@ Unlike other distributions, OneCore Linux is both a Client and Server distributi
 
 The closed source binaries are not included by default inside of the OSKit. The Linux Kernel used inside of the OSKit was compiled using the [Linux ZEN Kernel (6.10.9-zen1)](https://github.com/zen-kernel/zen-kernel/releases/tag/v6.10.9-zen1) unmodified source code.
 
-OneCore Linux is licensed under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0.html).
+OneCore Linux is licensed under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0.html) and comes with ABSOLUTELY NO WARRANTY.
