@@ -2,6 +2,8 @@
 # RC Script for Tiny Core Linux
 # (c) Robert Shingledecker 2004-2012
 # Several modifications for speed by Curaga
+
+. /etc/init.d/ocl-colors
 . /etc/init.d/tc-functions
 useBusybox
 
@@ -25,9 +27,12 @@ addUser(){
 
 # Main
 
+ONECORE_OEMCON="ttyS0"
 cat /etc/OneCore/Splash
 cat /etc/OneCore/OSInfo
 echo
+
+
 
 export PATH=/usr/local/sbin:/usr/local/bin:"$PATH"
 
@@ -49,6 +54,8 @@ for i in `cat /proc/cmdline`; do
 				home*) MYHOME=${i#*=} ;;
 				tcvd*) TCVD=${i#*=} ;;
 				opt*) MYOPT=${i#*=} ;;
+				oemcon*) ONECORE_OEMCON=${i#*=} ;;
+				oclpart*) ONECORE_PART=${i#*=} ;;
 				swapfile*) SWAPFILE=${i#*=} ;;
 				resume*) RESUME=${i#*=} ;;
 				host*) HOST=1 ;;
@@ -82,6 +89,8 @@ for i in `cat /proc/cmdline`; do
 				secure) SECURE=1 ;;
 				protect) PROTECT=1 ;;
 				cron) CRON=1 ;;
+				oemboot) ONECORE_OEMBOOT=1 ;;
+				asksetup) ONECORE_ASKSETUP=1 ;;
 				xsetup) XSETUP=1 ;;
 				laptop) LAPTOP=1 ;;
 				showapps) SHOWAPPS=1 ;;
@@ -491,6 +500,13 @@ if [ -n "$MYOPT" ]; then
 	fi
 fi
 
+if [ -n "$ONECORE_OEMBOOT" ]; then
+	if [ -f "/etc/OneCore/OEM/OEMBoot.sh" ]; then
+		echo " ========= OEM DEBUG CONSOLE ========== " > "/dev/$ONECORE_OEMCON"
+		sudo -u "$USER" sh "/etc/OneCore/OEM/OEMBoot.sh" > "/dev/$ONECORE_OEMCON" 2>&1 &
+	fi
+fi
+
 [ -n "$XSETUP" ] && touch /tmp/xsetup_requested
 
 if [ -n "$LAPTOP" ]; then
@@ -638,3 +654,61 @@ if [ -n "$PAUSE" ]; then
 fi
 
 echo " :: BOOT DONE"
+
+if [ -n "$ONECORE_ASKSETUP" ]; then
+	clear
+	sleep 2
+	while true; do
+		echo "************************************************************"
+		echo "**"
+		echo "**            OneCore Linux 2025, version $(cat /etc/OneCore/Semester)"
+		echo "**                 ===== USER PROMPT ====="
+		echo "**"
+		echo "**  Pick an option."
+		echo "**"
+		echo "**    1. INSTALL OneCore Linux"
+		echo "**"
+		echo "**    2. RUN OneCore Linux from the live environment"
+		echo "**"
+		echo "**    3. RESTART the machine"
+		echo "**"
+		echo "************************************************************"
+		echo
+		read -p "[1/2/3]  % " choice
+		case $choice in
+			1)
+				ocl-install
+				;;
+			2)
+				break
+				;;
+			3)
+				reboot -f
+				;;
+			*)
+				echo
+				;;
+		esac
+	done
+fi
+
+if [ -n "$ONECORE_PART" ]; then
+	if [ -f "/mnt/$ONECORE_PART/PostSetup/.BootSetup" ]; then
+		clear
+		echo "==================================="
+		echo " OneCore Linux is now entering     "
+		echo " PHASE 2 of setup. Do not reboot.  "
+		echo "==================================="
+		echo
+		sleep 10 # yes this sucks but we must wait for network to initializate (because we boot too quickly)
+		mv /sbin/reboot /sbin/reboot.bin
+		sudo -u "$USER" sh "/mnt/$ONECORE_PART/PostSetup/.BootSetup" >/dev/ttyS0
+		mv /sbin/reboot.bin /sbin/reboot
+		rm -rf "/mnt/$ONECORE_PART/PostSetup"
+		echo
+		echo "PHASE 2 COMPLETE !"
+		echo "  -> REBOOTING in 5 seconds..."
+		sleep 5
+		reboot
+	fi
+fi

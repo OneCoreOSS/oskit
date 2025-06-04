@@ -1,0 +1,249 @@
+#!/bin/sh
+set -e
+
+tceflight dialog dosfstools parted grub2-multi
+clear
+
+OS_VERSION="$(cat /etc/OneCore/Semester)"
+OS_TYPE="Client"
+OS_ARCH="amd64"
+
+BOOT_MNT="/mnt/boot"
+OS_MNT="/mnt/os"
+ISO_MNT="/mnt/cdrom"
+
+cat /etc/OneCore/Splash
+echo "*******************************************"
+echo "** OneCore Linux Setup"
+echo "** Version $OS_VERSION"
+echo "*******************************************"
+echo
+echo "You are running OneCore Linux ( $(cat /etc/OneCore/OSBld) )"
+sleep 2
+
+prompt() {
+	while :; do
+		ans="$(dialog --clear --title "Input Required" \
+			--inputbox "$1" 0 80 3>&1 1>&2 2>&3)"
+		status=$?
+		clear
+		if [ $status -ne 0 ]; then
+			echo "Aborted."
+			exit 1
+		fi
+		[ -n "$ans" ] || continue
+		if [ -n "$3" ]; then
+			echo "$ans" | grep -Eq "$3" || continue
+		fi
+		eval "$2=\$ans"
+		break
+	done
+}
+
+# == src media ==
+
+SOURCE="$(dialog --clear --title "Select Installation Source" \
+	--menu "Choose source:" 0 80 2 \
+	1 "Cloud Install" \
+	2 "Local Install" 3>&1 1>&2 2>&3)"
+clear
+[ -n "$SOURCE" ] || exit 1
+
+mkdir -p "$ISO_MNT"
+if [ "$SOURCE" = 2 ]; then
+	if mount | grep -q "$ISO_MNT"; then
+		umount "$ISO_MNT"
+	fi
+	mount /dev/sr0 "$ISO_MNT"
+else
+	ISO_URL="http://onecore.ct8.pl/Distrib/OS/ISOs/OCL-${OS_VERSION}.${OS_TYPE}-${OS_ARCH}.iso"
+	if mount | grep -q "$ISO_MNT"; then
+		umount "$ISO_MNT"
+	fi
+	wget -q -O /tmp/onecore.iso "$ISO_URL"
+	mount -o loop /tmp/onecore.iso "$ISO_MNT"
+fi
+
+if [ ! -f "$ISO_MNT/boot/vmlinuz" ] || [ ! -f "$ISO_MNT/boot/onecore64.gz" ]; then
+	echo "ERROR: Missing vmlinuz or onecore64.gz in ISO."
+	exit 1
+fi
+
+list_disks() {
+	echo "== Available disks =="
+	for d in /dev/sd[a-z] /dev/vd[a-z]; do
+		[ -b "$d" ] && echo "  $d"
+	done
+	return 0
+}
+
+list_parts() {
+	echo "== Available partitions on '$1' =="
+	parted -s "$1" print | awk '/^ [0-9]/{print "  "$1": "$2" "$3}'
+	return 0
+}
+
+# == install mode part select needs to be checked ==
+MODE="$(dialog --clear --title "Partitioning Mode" \
+	--menu "Install mode (destroys data if whole-disk):" 0 80 2 \
+	1 "Use whole disk" \
+	2 "Use existing partitions" 3>&1 1>&2 2>&3)"
+clear
+[ -n "$MODE" ] || exit 1
+
+if [ "$MODE" = 1 ]; then
+	list_disks
+	echo
+	prompt "Target disk (e.g. /dev/sda):" DISK '^/dev/[sv]d[a-z]$'
+
+	dialog --clear --title "! WARNING !" --yesno "!!! ALL DATA ON $DISK WILL BE DESTROYED !!!\n\nProceed?" 8 80
+	if [ $? -ne 0 ]; then clear; echo "Aborted."; exit 1; fi
+	clear
+
+	if [ -d /sys/firmware/efi ]; then
+		LABEL=gpt
+	else
+		LABEL=msdos
+	fi
+	parted -s "$DISK" mklabel "$LABEL"
+	parted -s "$DISK" mkpart primary fat32 1MiB 513MiB
+	parted -s "$DISK" set 1 boot on
+	parted -s "$DISK" mkpart primary ext4 513MiB 100%
+	BOOT_PART="${DISK}1"
+	OS_PART="${DISK}2"
+else
+	list_disks
+	echo
+	prompt "Selected Disk (e.g. /dev/sda) : " DISK '^/dev/[sv]d[a-z]$'
+
+	CHOICE="$(dialog --clear --title "Partitions" \
+		--menu "Use existing or create new partitions?" 0 80 2 \
+		1 "Create new partitions" \
+		2 "Use existing partitions" 3>&1 1>&2 2>&3)"
+	clear
+	[ -n "$CHOICE" ] || exit 1
+
+	if [ "$CHOICE" = 1 ]; then
+		if [ -d /sys/firmware/efi ]; then
+			LABEL=gpt
+		else
+			LABEL=msdos
+		fi
+		parted -s "$DISK" mklabel "$LABEL"
+		parted -s "$DISK" mkpart primary fat32 1MiB 513MiB
+		parted -s "$DISK" set 1 boot on
+		parted -s "$DISK" mkpart primary ext4 513MiB 100%
+		BOOT_PART="${DISK}1"
+		OS_PART="${DISK}2"
+	else
+		list_parts "$DISK"
+		echo
+		prompt "Boot partition number (e.g. 1):" BIDX '^[0-9]+$'
+		prompt "OS partition number  (e.g. 2):" OIDX '^[0-9]+$'
+		BOOT_PART="${DISK}${BIDX}"
+		OS_PART="${DISK}${OIDX}"
+	fi
+fi
+
+# == install type either ram or disk boot ==
+ITYPE="$(dialog --clear --title "Installation Type" \
+	--menu "Choose boot mode:" 0 80 2 \
+	1 "OneCore Linux (RAM Boot) [Recommended]" \
+	2 "OneCore Linux (Disk Boot) [UNSTABLE]" 3>&1 1>&2 2>&3)"
+clear
+[ -n "$ITYPE" ] || exit 1
+
+mkfs.vfat -F32 "$BOOT_PART"
+mkfs.ext4 "$OS_PART"
+
+mkdir -p "$BOOT_MNT" "$OS_MNT"
+mount "$BOOT_PART" "$BOOT_MNT"
+mount "$OS_PART" "$OS_MNT"
+
+cp "$ISO_MNT/boot/vmlinuz" "$BOOT_MNT/Kernel"
+if [ "$ITYPE" = 1 ]; then
+	cp "$ISO_MNT/boot/onecore64.gz" "$BOOT_MNT/OS.gz"
+else
+	cp "$ISO_MNT/boot/onecore64.gz" "/tmp/OS.gz"
+	(cd "$OS_MNT" && gunzip -c /tmp/OS.gz | cpio -idmv)
+fi
+
+ITYPE="$(dialog --clear --title "User Experience" \
+	--menu "Select your User Experience" 0 80 2 \
+	1 "[NEW] Reference Desktop Environment (CDE)" \
+	2 "Xorg/JWM" \
+	3 "Xorg/icewm" \
+	4 "Xorg/fluxbox" \
+	5 "No User Experience" 3>&1 1>&2 2>&3)"
+clear
+[ -n "$ITYPE" ] || exit 1
+
+mkdir -p "$OS_MNT/PostSetup"
+SOLO_PART="$(echo $OS_PART | sed 's/\/dev\///')"
+
+if [ "$ITYPE" = 1 ]; then
+	mkdir -p "$OS_MNT/PostSetup/TCEs"
+	echo "    -> Copying OpenSSL, Certificates and APK"
+	cp "/etc/OneCore"/OEM/*.tcz* "$OS_MNT/PostSetup/TCEs/"
+	if [ "$SOURCE" = 2 ]; then
+		echo "    -> Copying RDE"
+		cp "$ISO_MNT/OEM/"/RDE/*.tcz* "$OS_MNT/PostSetup/TCEs/"
+	else
+		echo "    -> Downloading RDE"
+		MISCPKG_URL="http://onecore.ct8.pl/Distrib/Software/OS/OCL-${OS_VERSION}-${OS_ARCH}"
+		wget $MISCPKG_URL/bdftopcf.tcz -O "$OS_MNT/PostSetup/TCEs/bdftopcf.tcz"
+		wget $MISCPKG_URL/cde.tcz -O "$OS_MNT/PostSetup/TCEs/cde.tcz"
+		wget $MISCPKG_URL/cde.tcz.dep -O "$OS_MNT/PostSetup/TCEs/cde.tcz.dep"
+		wget $MISCPKG_URL/ksh.tcz -O "$OS_MNT/PostSetup/TCEs/ksh.tcz"
+		wget $MISCPKG_URL/sessreg.tcz -O "$OS_MNT/PostSetup/TCEs/sessreg.tcz"
+		wget $MISCPKG_URL/xrdb.tcz -O "$OS_MNT/PostSetup/TCEs/xrdb.tcz"
+	fi
+	echo "tce-load -wi Xfbdev Xorg-7.7-3d rpcbind motif" > "$OS_MNT/PostSetup/.BootSetup"
+	echo "sudo mv /mnt/$SOLO_PART/PostSetup/TCEs/*.* /mnt/$SOLO_PART/tce/optional/" >> "$OS_MNT/PostSetup/.BootSetup"
+	echo "sudo echo \"cde.tcz\" >> /mnt/$SOLO_PART/tce/onboot.lst" >> "$OS_MNT/PostSetup/.BootSetup"
+elif [ "$ITYPE" = 2 ]; then
+	echo "tce-load -wi Xfbdev Xorg-7.7-3d jwm" > "$OS_MNT/PostSetup/.BootSetup"
+elif [ "$ITYPE" = 3 ]; then
+	echo "tce-load -wi Xfbdev Xorg-7.7-3d icewm" > "$OS_MNT/PostSetup/.BootSetup"
+elif [ "$ITYPE" = 4 ]; then
+	echo "tce-load -wi Xfbdev Xorg-7.7-3d fluxbox" > "$OS_MNT/PostSetup/.BootSetup"
+fi
+
+echo "sudo echo \"apk.tcz\" >> /mnt/$SOLO_PART/tce/onboot.lst" >> "$OS_MNT/PostSetup/.BootSetup"
+
+umount "$ISO_MNT"
+
+mkdir -p "$OS_MNT/tce"
+touch "$OS_MNT/mydata.tgz"
+mkdir -p "$BOOT_MNT/grub"
+cat > "$BOOT_MNT/grub/grub.cfg" <<EOF
+set default=0
+set gfxpayload=1024x768x32
+terminal_output gfx
+menuentry "OneCore Linux $OS_VERSION" {
+	echo "== Booting OneCore Linux ${OS_VERSION} =="
+	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} root=${OS_PART} rw quiet loglevel=3
+	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
+}
+
+menuentry "OneCore Linux $OS_VERSION (No Swap)" {
+	echo "== Booting OneCore Linux ${OS_VERSION} =="
+	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} root=${OS_PART} rw quiet loglevel=3
+	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
+}
+EOF
+
+if [ -d /sys/firmware/efi ]; then
+	grub-install --target=x86_64-efi --efi-directory="$BOOT_MNT" --boot-directory="$BOOT_MNT" "$DISK"
+else
+	grub-install --target=i386-pc  --boot-directory="$BOOT_MNT" "$DISK"
+fi
+
+umount "$BOOT_MNT" "$OS_MNT"
+echo
+echo "== OneCore Linux has been installed successfully =="
+echo
+echo "Thank you for using OneCore Linux !"
+echo
+echo "You may now reboot your system and boot into your newly installed Operating System."
+echo

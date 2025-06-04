@@ -1,0 +1,6 @@
+for i in 1 2 3; do
+	echo -e "\033]P0111111" > /dev/tty${i}
+	echo -e "\033]P7DDDDDD" > /dev/tty${i}
+	echo -e "\033]PEEC7E09" > /dev/tty${i}
+	clear > /dev/tty${i}
+done

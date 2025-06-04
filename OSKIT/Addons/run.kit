@@ -1,0 +1,16 @@
+##################################
+# DO NOT RUN THIS SCRIPT DIRECTLY
+# USE WITH OSKIT.
+##################################
+
+if [ -z "$1" ]; then
+	cat $OSK_DATA/UserHelp/run.usage
+	exit 1
+fi
+
+if ls "$OSK_ROOT/OUTPUT"/OCL-*-"$1".iso 1> /dev/null 2>&1; then
+	ISOFILE="$OSK_ROOT/OUTPUT"/OCL-*-"$1".iso
+	# Reference VM, minimum specs (1GB RAM, 2 Cores)
+	shift
+	qemu-system-x86_64 -accel kvm -M q35 -cpu qemu64 -smp 2 -m 1G -cdrom $ISOFILE -usb -device usb-tablet -vga virtio -net nic,model=virtio -net user -serial stdio $@
+fi

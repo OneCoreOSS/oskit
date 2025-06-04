@@ -19,8 +19,17 @@ echo "**  To learn the basics on how to build an OS using OSKit type 'ohelp'"
 echo "**"
 cat "$OSK_HELP/Welcome.txt"
 echo "********************************************************************************"
+echo
+
+OSK_QUIT="true"
+OSK_RESTOREPS1="PS1=\"$PS1\""
 
 for Addon in $OSK_ADDONS/*.kit; do
 	SELF_ADDON=$(echo $(basename $Addon) | sed 's/\.kit//g')
-	alias $SELF_ADDON="OSK_ROOT=$OSK_ROOT OSK_DATA=$OSK_DATA sh $Addon"
+	alias $SELF_ADDON="OSK_OPS1=\"$PS1\" OSK_ROOT=$OSK_ROOT OSK_DATA=$OSK_DATA sh $Addon"
+	OSK_QUIT="$OSK_QUIT && unalias $SELF_ADDON"
 done
+
+alias quit="$OSK_QUIT && $OSK_RESTOREPS1"
+
+PS1="(OSKIT) [\w]  % "

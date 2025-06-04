@@ -1,0 +1,8 @@
+Description:
+	Starts a QEMU X86 Virtual Machine with reference parameters.
+
+Usage:
+	run <sku>
+
+	example:
+		run mainline

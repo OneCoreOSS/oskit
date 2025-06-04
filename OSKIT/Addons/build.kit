@@ -5,6 +5,8 @@
 
 declare -a ArrMedia
 declare -a ArrSKUS
+declare -a ArrBLDType
+OEMON=0
 
 GenerateBldVer(){
 	MAJORVER=$(cat $OSK_DATA/OSInfo/SKUMAJOR.INF)
@@ -29,14 +31,22 @@ GenerateBldInfo(){
 }
 
 for arg in "$@"; do
-    case $arg in
-        -media:*)
-            ArrMedia=($(echo "${arg#-media:}" | tr ',' ' '))
-            ;;
-        -skus:*)
-            ArrSKUS=($(echo "${arg#-skus:}" | tr ',' ' '))
-            ;;
-    esac
+	case $arg in
+		-media:*)
+			ArrMedia=($(echo "${arg#-media:}" | tr ',' ' '))
+			;;
+		-type:*)
+			ArrBLDType=($(echo "${arg#-type:}" | tr ',' ' '))
+			;;
+		-skus:*)
+			ArrSKUS=($(echo "${arg#-skus:}" | tr ',' ' '))
+			;;
+		-oem:*)
+			if [[ "${arg#-oem:}" == "yes" ]]; then
+				OEMON=1
+			fi
+			;;
+	esac
 done
 
 if [ ${#ArrMedia[@]} -eq 0 ] || [ ${#ArrSKUS[@]} -eq 0 ]; then
@@ -73,8 +83,10 @@ else
 				sudo cp "$OSK_DATA/OSInfo/SKUMINOR.INF" "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/"
 				sudo echo "$BLDInfo" > /tmp/.osinfo
 				sudo echo "$BLDVer" > /tmp/.osbld
+				sudo echo "$sku" > /tmp/.ossku
 				sudo mv /tmp/.osinfo "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/OSInfo"
 				sudo mv /tmp/.osbld "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/OSBld"
+				sudo mv /tmp/.ossku "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/OSSku"
 				sudo ln -s /etc/OneCore/OSInfo "$OSK_ROOT/BUILD/ONECORE0/etc/OneCoreBLD"
 				if [ -d "$OSK_ROOT/SKUS/$sku/FLIGHT/TCE" ]; then
 					echo ":: Deploying TCE Packages (May take a while, Requires Root)"
@@ -99,6 +111,11 @@ else
 				sudo chmod +x "$OSK_ROOT/BUILD/ONECORE0/"bin/*
 				sudo chmod +x "$OSK_ROOT/BUILD/ONECORE0/usr/"bin/*
 				sudo chmod +x "$OSK_ROOT/BUILD/ONECORE0/usr/local/"bin/*
+				# OEM RFS Files
+				if [ -n "$OEMON" ] && [ "$OEMON" -eq 1 ]; then
+					echo ":: Adding OEM Customizations for ROOTFS"
+					sudo cp -r "$OSK_ROOT/OEM/RFS" "$OSK_ROOT/BUILD/ONECORE0/etc/OneCore/OEM"
+				fi
 				echo ":: Creating Initrd"
 				pushd "$OSK_ROOT/BUILD/ONECORE0/"
 				mkdir -p "$OSK_ROOT/OUTPUT"
@@ -119,6 +136,11 @@ else
 				if [ -d "$OSK_ROOT/SKUS/$sku/ISOEXTRA/" ]; then
 					echo ":: Copying Extra files to ISO"
 					sudo cp -r "$OSK_ROOT/SKUS/$sku/"ISOEXTRA/* "/tmp/ISORW/"
+				fi
+				# OEM ISO Files
+				if [ -n "$OEMON" ] && [ "$OEMON" -eq 1 ]; then
+					echo ":: Adding OEM Customizations for ISO"
+					sudo cp -r "$OSK_ROOT/OEM/ISO" "/tmp/ISORW/OEM"
 				fi
 				echo ":: Building ISO"
 				sudo xorriso -as mkisofs -isohybrid-mbr /usr/lib/syslinux/bios/isohdpfx.bin -c boot/isolinux/boot.cat -b boot/isolinux/isolinux.bin  -no-emul-boot -boot-load-size 4 -boot-info-table -eltorito-alt-boot -e boot.img -no-emul-boot -isohybrid-gpt-basdat -hide boot.img -o "$OSK_ROOT/OUTPUT/OCL-$(cat $OSK_DATA/OSInfo/Semester)-$sku.iso" /tmp/ISORW/

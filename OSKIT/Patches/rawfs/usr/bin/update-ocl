@@ -1,0 +1,52 @@
+#!/bin/sh
+
+SEMESTER=$(cat /etc/OneCore/Semester)
+OSSKU=$(cat /etc/OneCore/OSSku)
+PREFIX="${SEMESTER}.${OSSKU}"
+BASE_URL="http://onecore.ct8.pl/Distrib/OS/Updates"
+
+VER_URL="${BASE_URL}/${PREFIX}.VER"
+NFO_URL="${BASE_URL}/${PREFIX}.NFO"
+
+remote_build=$(wget -qO- "$VER_URL" | tr -d '\r')
+if [ $? -ne 0 ] || [ -z "$remote_build" ]; then
+	echo "Error: Unable to fetch remote build number from $VER_URL"
+	exit 1
+fi
+
+if [ ! -f /etc/OneCore/SKUMINOR.INF ]; then
+	echo "Error: Local SKUMINOR.INF not found"
+	exit 1
+fi
+
+local_build=$(cat /etc/OneCore/SKUMINOR.INF | tr -d '\r')
+
+if [ "$remote_build" -gt "$local_build" ]; then
+	nfo_content=$(wget -qO- "$NFO_URL" | tr -d '\r')
+	if [ $? -ne 0 ]; then
+		echo "Error: Unable to fetch update info from $NFO_URL"
+		exit 1
+	fi
+	echo "Update Available"
+	echo "  $nfo_content"
+	echo "Do you wish to update?"
+	echo "  Y) Yes"
+	echo "  N) No"
+
+	echo -n "Enter choice [Y/N]: "
+	read choice
+	case "$choice" in
+		Y|y)
+			echo "Stub: Starting update process..."
+		;;
+		N|n)
+			echo "Update canceled by user."
+		;;
+		*)
+			echo "Invalid choice. Exiting."
+			exit 1
+		;;
+	esac
+else
+	echo "No updates available."
+fi

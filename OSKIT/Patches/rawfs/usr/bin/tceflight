@@ -1,0 +1,150 @@
+#!/bin/sh
+
+set -e
+
+TCEURL="http://repo.tinycorelinux.net/16.x/x86_64/tcz/"
+
+if [ "$#" -eq 0 ]; then
+	echo "Usage: tceflight <Package> [Package...]"
+	exit 1
+fi
+
+TMPDIR="/tmp/tcefltmp"
+TEMPDIR="$TMPDIR/TEMP"
+DEPSFILE="$TEMPDIR/deps.lst"
+FLIGHTED="$TMPDIR/FLIGHTED.LST"
+INSTALLFILE="$TMPDIR/INSTALL.LST"
+LOOPDIR="/tmp/tcloop"
+
+mkdir -p "$TMPDIR" "$TEMPDIR" "$LOOPDIR"
+> "$FLIGHTED"
+> "$INSTALLFILE"
+
+DEPARR=""
+> "$DEPSFILE"
+for pkg in "$@"; do
+	echo "$pkg.tcz" >> "$DEPSFILE"
+	DEPARR="$DEPARR $pkg.tcz"
+done
+
+echo ":: Building dependency list for: $*"
+
+UpdDeps() {
+	pkg="$1"
+	url="$TCEURL/$pkg.dep"
+	base=$(basename "$tcz" .tcz)
+	if [ -f "/usr/local/tce.installed/$base" ]; then
+		return # already installed
+	fi
+	if ! wget -o /dev/null -qO "$TEMPDIR/$pkg.dep" "$url"; then
+		return
+	fi
+	deps="$(cat $TEMPDIR/$pkg.dep | sed 's/ //g')"
+	printf "%s\n" "$deps" >> "$DEPSFILE"
+	for dep in $deps; do
+		echo "$DEPARR" | grep -qw "$dep" && continue
+		case "$dep" in *KERNEL*) continue ;; esac # skip kernel packages on OneCore
+		DEPARR="$DEPARR $dep"
+		UpdDeps "$dep"
+	done
+}
+
+for pkg in "$@"; do
+	if [ -f "/usr/local/tce.installed/$pkg" ]; then
+		echo ":: Package '$pkg' already installed."
+		return
+	fi
+	UpdDeps "$pkg.tcz"
+done
+
+echo ":: Removing duplicates in dependency list"
+awk '!seen[$0]++' "$DEPSFILE" > "$DEPSFILE.tmp" && mv "$DEPSFILE.tmp" "$DEPSFILE"
+
+# reverse dep list (load deps first, target package last)
+sed '1!G;h;$!d' "$DEPSFILE" > "$DEPSFILE.tmp"
+mv "$DEPSFILE.tmp" "$DEPSFILE"
+
+echo ":: Downloading Packages"
+total=$(wc -l < "$DEPSFILE" | tr -d ' ')
+i=1
+while IFS= read -r tcz; do
+	printf "\033[2K\r  [%d/%d] Downloading '%s' \r" "$i" "$total" "$tcz"
+	wget -qO "$TMPDIR/$tcz" "$TCEURL/$tcz"
+	printf "%s\n" "$tcz" >> "$INSTALLFILE"
+	i=$((i+1))
+done < "$DEPSFILE"
+
+echo
+echo ":: Installing Packages"
+
+# NOTE: we implemented our own tcz installer because tce-load -i is kinda quirky when it comes to installing packages
+#       one by one, so instead we just process it ourselves, but we still give our users the choice if LEGACY is set.
+
+total=$(wc -l < "$INSTALLFILE" | tr -d ' ')
+i=1
+while IFS= read -r tcz; do
+	printf "\033[2K\r  [%d/%d] Installing '%s' \r" "$i" "$total" "$tcz"
+	if [ "${LEGACY:-0}" = "1" ]; then
+		tce-load -i "$TMPDIR/$tcz" > /dev/null
+	else
+		pkgname=$(basename "$tcz" .tcz)
+		mountpt="$LOOPDIR/$pkgname"
+		mkdir -p "$mountpt"
+		sudo mount -o loop "$TMPDIR/$tcz" "$mountpt"
+		if [ -d "$mountpt/usr/local/lib" ]; then
+			for library in "$mountpt/usr/local/lib"/*; do
+				FREEPATH="$(echo $library | sed 's/\/tmp\/tcloop\/'$pkgname'//g')"
+				if [ -e "$library" ] && [ ! -d "/usr/lib/$(basename $FREEPATH)" ]; then
+					sudo ln -sf "$FREEPATH" /usr/lib/
+				fi
+			done
+		fi
+		for basedir in $(ls "$mountpt/usr/"); do
+			if [ -e "$mountpt/usr/$basedir" ] && [ "$basedir" = "local" ]; then
+				for legdir in $(ls "$mountpt/usr/$basedir"); do
+					sudo mkdir -p "/usr/$basedir/$legdir"
+					for legbin in $(ls "$mountpt/usr/$basedir/$legdir"); do
+						if [ -d "$mountpt/usr/$basedir/$legdir/$legbin" ]; then
+							sudo cp -r "$mountpt/usr/$basedir/$legdir/$legbin" "/usr/$basedir/$legdir/"
+						else
+							sudo ln -sfn "$mountpt/usr/$basedir/$legdir/$legbin" "/usr/$basedir/$legdir/$legbin"
+						fi
+					done
+				done
+			else
+				sudo mkdir -p "/usr/$basedir"
+				for legbin in $(ls "$mountpt/usr/$basedir"); do
+					if [ -d "$mountpt/usr/$basedir/$legbin" ]; then
+						if [ ! -d "/usr/$basedir/$legbin" ]; then
+							sudo cp -r "$mountpt/usr/$basedir/$legbin" "/usr/$basedir/"
+						fi
+					else
+						sudo ln -sfn "$mountpt/usr/$basedir/$legbin" "/usr/$basedir/$legbin"
+					fi
+				done
+
+			fi
+		done
+		if [ -e "$mountpt/etc" ]; then
+			sudo cp -r "$mountpt/etc" "/"
+		fi
+
+		if [ -f "/usr/local/tce.installed/$pkgname" ]; then
+			echo "sh \"/usr/local/tce.installed/$pkgname\"" >> "$TEMPDIR/POSTINSTALL.SH"
+			# sudo ln -sfn "$mountpt/usr/local/tce.installed/$pkgname" "/usr/local/tce.installed/$pkgname"
+		else
+			sudo touch "/usr/local/tce.installed/$pkgname"
+		fi
+	fi
+	i=$((i+1))
+done < "$INSTALLFILE"
+
+if [ -f "/usr/local/tce.installed/$pkgname" ] && [ -f "$TEMPDIR/POSTINSTALL.SH" ]; then
+	sudo sh "$TEMPDIR/POSTINSTALL.SH"
+	rm -f "$TEMPDIR/POSTINSTALL.SH"
+fi
+cp "$DEPSFILE" "$FLIGHTED"
+rm -f "$INSTALLFILE"
+
+echo
+echo ":: Done"

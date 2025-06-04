@@ -11,6 +11,7 @@ ONDEMAND=/etc/sysconfig/tcedir/ondemand
 # or Bash. Default is a classic prompt.
 #
 PS1='\e[1;37m\u@\h\e[0m:\e[1;36m\w\e[0m\$ \e[?16;0;250c'
+PS1='\e[1;36m[\u - \e[1;33m\w\e[1;36m] % \e[0m\e[?16;0;250c'
 PAGER='less -EM'
 MANPAGER='less -isR'
 
@@ -28,9 +29,40 @@ if [ -f "$HOME/.ashrc" ]; then
 fi
 
 TERMTYPE=`/usr/bin/tty`
-[ ${TERMTYPE:5:3} == "tty" ] && (
-[ ! -f /etc/sysconfig/Xserver ] ||
-[ -f /etc/sysconfig/text ] ||
-[ -e /tmp/.X11-unix/X0 ] || 
-startx
-)
+
+echo "    Welcome to OneCore Linux 2025 !"
+echo
+if [ -f "/usr/dt/bin/dtlogin" ]; then
+	echo "******************************************************"
+	echo "**"
+	echo "**   1. RUN the Reference Desktop Environment"
+	echo "**"
+	echo "**   2. USE the terminal"
+	echo "**"
+	echo "******************************************************"
+	echo
+	while true; do
+		read -p "[1/2]  % " choice
+		case $choice in
+			1)
+				clear
+				echo
+				echo "        Launching the Reference Desktop Environment..."
+				sudo mount devpts -t devpts /dev/pts -o remount,mode=666
+				sudo /usr/dt/bin/dtlogin
+				;;
+			2)
+				break
+				;;
+			*)
+				echo
+				;;
+		esac
+	done
+fi
+
+if [ -f "$(which startx)" ] && [ ! -f "/usr/dt/bin/dtlogin" ]; then
+	echo
+	echo "Xorg has been detected ! Type 'startx' to start the graphical interface."
+	echo
+fi

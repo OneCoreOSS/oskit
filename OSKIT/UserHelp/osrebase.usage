@@ -3,5 +3,6 @@ Usage:
 
 	versions:
 		latest
+		TCL16
 		TCL15
 		TCL14

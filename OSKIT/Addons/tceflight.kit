@@ -27,7 +27,7 @@ fi
 TEMPDIR="$OSK_ROOT/BUILD/TEMP"
 
 UpdDeps(){
-	DEPCODE=$(curl -o /dev/null -s -w "%{http_code}\n" $TCEURL/$1.dep)
+	DEPCODE=$(curl -Lk -o /dev/null -s -w "%{http_code}\n" $TCEURL/$1.dep)
 	if [ $DEPCODE = "404" ]; then
 		printf "\n[TCEFlight] Dependency '$1' has reached end of dependency         \r"
 		return
