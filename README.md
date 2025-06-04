@@ -66,7 +66,7 @@ This will apply the OneCore Linux files onto the ``mainline`` edition (which is 
  <build process>
 ```
 
-** NEW: Build an OEM Image **
+**NEW: Build an OEM Image**
 
    OneCore Linux 25H2 has introduced a brand new feature to OSKit ; OEM Images.
 
@@ -94,7 +94,7 @@ Simply 'run' your built edition and it will launch a QEMU X86 Virtual Machine wi
 
 ---
 
-OneCore Linux is a distribution based off of TinyCore Linux. All OS packages provided inside of OneCore Linux are sourced from their original sources, located [here](http://tinycorelinux.net/).
+OneCore Linux is a distribution based off of TinyCore Linux. All OS packages provided in OneCore Linux are sourced from their original sources, located [here](http://tinycorelinux.net/).
 
 Unlike other distributions, OneCore Linux is both a Client and Server distribution. It can be used as a blazingly fast client, or a resilliant server. 
 
