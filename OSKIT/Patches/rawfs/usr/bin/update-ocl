@@ -1,49 +1,118 @@
 #!/bin/sh
 
 SEMESTER=$(cat /etc/OneCore/Semester)
+
 OSSKU=$(cat /etc/OneCore/OSSku)
+OSTYPE="Client"
+OSARCH="amd64"
+
 PREFIX="${SEMESTER}.${OSSKU}"
 BASE_URL="http://onecore.ct8.pl/Distrib/OS/Updates"
 
 VER_URL="${BASE_URL}/${PREFIX}.VER"
 NFO_URL="${BASE_URL}/${PREFIX}.NFO"
 
-remote_build=$(wget -qO- "$VER_URL" | tr -d '\r')
-if [ $? -ne 0 ] || [ -z "$remote_build" ]; then
-	echo "Error: Unable to fetch remote build number from $VER_URL"
+LOCAL_BUILD=$(cat /etc/OneCore/SKUMINOR.INF | tr -d '\r')
+REMOTE_BUILD=$(wget -qO- "$VER_URL" | tr -d '\r')
+
+if [ $? -ne 0 ] || [ -z "$REMOTE_BUILD" ]; then
+	echo " !! Unable to fetch remote build number from $VER_URL"
 	exit 1
 fi
 
-if [ ! -f /etc/OneCore/SKUMINOR.INF ]; then
-	echo "Error: Local SKUMINOR.INF not found"
+if [ ! -f "/etc/OneCore/SKUMINOR.INF" ]; then
+	echo " !! Local SKUMINOR.INF not found"
 	exit 1
 fi
 
-local_build=$(cat /etc/OneCore/SKUMINOR.INF | tr -d '\r')
 
-if [ "$remote_build" -gt "$local_build" ]; then
-	nfo_content=$(wget -qO- "$NFO_URL" | tr -d '\r')
+if [ "$REMOTE_BUILD" -gt "$LOCAL_BUILD" ]; then
+	NFO_CONTENT=$(wget -qO- "$NFO_URL" | tr -d '\r')
 	if [ $? -ne 0 ]; then
 		echo "Error: Unable to fetch update info from $NFO_URL"
 		exit 1
 	fi
 	echo "Update Available"
-	echo "  $nfo_content"
+	echo "  $NFO_CONTENT"
 	echo "Do you wish to update?"
 	echo "  Y) Yes"
 	echo "  N) No"
 
-	echo -n "Enter choice [Y/N]: "
+	echo -n "Enter choice [Y/N] % "
 	read choice
 	case "$choice" in
 		Y|y)
-			echo "Stub: Starting update process..."
+			echo " :: Starting Update."
+			echo " :: Detecting Installed OS"
+
+			CMDLINE="$(sudo cat /proc/cmdline)"
+			for BOOTARG in $CMDLINE; do
+				case "$BOOTARG" in
+					syspart=*)
+						SYSPART="${BOOTARG#syspart=}"
+						break
+						;;
+				esac
+			done
+
+			if [ -z "$SYSPART" ]; then
+				echo " !! 'syspart' boot option not found."
+				echo " !! Make sure OneCore Linux is fully installed on your machine."
+				exit 1
+			fi
+
+			mkdir -p "/tmp/SYSMOUNT"
+			sudo mount "$SYSPART" "/tmp/SYSMOUNT"
+
+			if [ ! -e "/tmp/SYSMOUNT/OS.gz" ]; then
+				echo " !! Cannot find 'OS.gz' inside of '/tmp/SYSMOUNT'"
+				exit 1
+			fi
+			if [ ! -e "/tmp/SYSMOUNT/Kernel" ]; then
+				echo " !! Cannot find 'Kernel' inside of '/tmp/SYSMOUNT'"
+				exit 1
+			fi
+
+			echo " :: Downloading latest release '$NFO_CONTENT'"
+			LATEST_RELEASE_URL="http://onecore.ct8.pl/Distrib/OS/ISOs/OCL-${SEMESTER}.${OSTYPE}-${OSARCH}.iso"
+			OSUPDATE_FILE="/tmp/OSUpdate"
+			wget "$LATEST_RELEASE_URL" -O "$OSUPDATE_FILE"
+			if [ $? -ne 0 ]; then
+				echo " !! Error while downloading latest OS Release"
+				echo " !! Attempted to fetch '$LATEST_RELEASE_URL'"
+				exit 1
+			fi
+			if [ ! -e "/tmp/OSUpdate" ]; then
+				echo " !! Error while checking for OS Update locally."
+				exit 1
+			fi
+
+			mkdir -p "/tmp/OSUPDATE.TEMP"
+			sudo mount "$OSUPDATE_FILE" "/tmp/OSUPDATE.TEMP"
+			if [ -e "/tmp/OSUPDATE.TEMP/boot/onecore64.gz" ]; then
+				echo " :: Updating ROOTFS"
+				sudo mv "/tmp/SYSMOUNT/OS.gz" "/tmp/SYSMOUNT/OS.gz.old"
+				sudo cp "/tmp/OSUPDATE.TEMP/boot/onecore64.gz" "/tmp/SYSMOUNT/OS.gz"
+			fi
+			if [ -e "/tmp/OSUPDATE.TEMP/boot/vmlinuz" ]; then
+				echo " :: Updating Kernel"
+				sudo mv "/tmp/SYSMOUNT/Kernel" "/tmp/SYSMOUNT/Kernel.old"
+				sudo cp "/tmp/OSUPDATE.TEMP/boot/vmlinuz" "/tmp/SYSMOUNT/Kernel"
+			fi
+			echo " :: Unmounting SYSMOUNT"
+			sudo umount "/tmp/SYSMOUNT"
+			echo " :: Update completed."
+			echo " :: Reboot your computer to finish updating."
+			echo " :: You can remove the old OS by mounting '$SYSPART' and deleting :"
+			echo " ::   <SYSMOUNT>/OS.gz.old"
+			echo " ::   <SYSMOUNT>/Kernel.old"
+			echo
 		;;
 		N|n)
-			echo "Update canceled by user."
+			echo " :: Update canceled by user."
 		;;
 		*)
-			echo "Invalid choice. Exiting."
+			echo " !! Invalid choice. Exiting."
 			exit 1
 		;;
 	esac

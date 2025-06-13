@@ -168,7 +168,7 @@ else
 	(cd "$OS_MNT" && gunzip -c /tmp/OS.gz | cpio -idmv)
 fi
 
-ITYPE="$(dialog --clear --title "User Experience" \
+UXTYPE="$(dialog --clear --title "User Experience" \
 	--menu "Select your User Experience" 0 80 2 \
 	1 "[NEW] Reference Desktop Environment (CDE)" \
 	2 "Xorg/JWM" \
@@ -181,10 +181,9 @@ clear
 mkdir -p "$OS_MNT/PostSetup"
 SOLO_PART="$(echo $OS_PART | sed 's/\/dev\///')"
 
-if [ "$ITYPE" = 1 ]; then
-	mkdir -p "$OS_MNT/PostSetup/TCEs"
-	echo "    -> Copying OpenSSL, Certificates and APK"
-	cp "/etc/OneCore"/OEM/*.tcz* "$OS_MNT/PostSetup/TCEs/"
+mkdir -p "$OS_MNT/PostSetup/TCEs"
+
+if [ "$UXTYPE" = 1 ]; then
 	if [ "$SOURCE" = 2 ]; then
 		echo "    -> Copying RDE"
 		cp "$ISO_MNT/OEM/"/RDE/*.tcz* "$OS_MNT/PostSetup/TCEs/"
@@ -199,16 +198,21 @@ if [ "$ITYPE" = 1 ]; then
 		wget $MISCPKG_URL/xrdb.tcz -O "$OS_MNT/PostSetup/TCEs/xrdb.tcz"
 	fi
 	echo "tce-load -wi Xfbdev Xorg-7.7-3d rpcbind motif" > "$OS_MNT/PostSetup/.BootSetup"
-	echo "sudo mv /mnt/$SOLO_PART/PostSetup/TCEs/*.* /mnt/$SOLO_PART/tce/optional/" >> "$OS_MNT/PostSetup/.BootSetup"
 	echo "sudo echo \"cde.tcz\" >> /mnt/$SOLO_PART/tce/onboot.lst" >> "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$ITYPE" = 2 ]; then
+elif [ "$UXTYPE" = 2 ]; then
 	echo "tce-load -wi Xfbdev Xorg-7.7-3d jwm" > "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$ITYPE" = 3 ]; then
+elif [ "$UXTYPE" = 3 ]; then
 	echo "tce-load -wi Xfbdev Xorg-7.7-3d icewm" > "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$ITYPE" = 4 ]; then
+elif [ "$UXTYPE" = 4 ]; then
 	echo "tce-load -wi Xfbdev Xorg-7.7-3d fluxbox" > "$OS_MNT/PostSetup/.BootSetup"
+elif [ "$UXTYPE" = 5 ]; then
+	echo "# No User Experience" > "$OS_MNT/PostSetup/.BootSetup"
 fi
 
+echo "    -> Copying OpenSSL, Certificates and APK"
+cp "/etc/OneCore"/OEM/apk.tcz* "$OS_MNT/PostSetup/TCEs/"
+echo "tce-load -wi openssl ca-certificates" >> "$OS_MNT/PostSetup/.BootSetup"
+echo "sudo mv /mnt/$SOLO_PART/PostSetup/TCEs/*.* /mnt/$SOLO_PART/tce/optional/" >> "$OS_MNT/PostSetup/.BootSetup"
 echo "sudo echo \"apk.tcz\" >> /mnt/$SOLO_PART/tce/onboot.lst" >> "$OS_MNT/PostSetup/.BootSetup"
 
 umount "$ISO_MNT"
@@ -222,13 +226,13 @@ set gfxpayload=1024x768x32
 terminal_output gfx
 menuentry "OneCore Linux $OS_VERSION" {
 	echo "== Booting OneCore Linux ${OS_VERSION} =="
-	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} root=${OS_PART} rw quiet loglevel=3
+	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} rw quiet loglevel=3
 	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
 }
 
 menuentry "OneCore Linux $OS_VERSION (No Swap)" {
 	echo "== Booting OneCore Linux ${OS_VERSION} =="
-	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} root=${OS_PART} rw quiet loglevel=3
+	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} rw quiet loglevel=3
 	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
 }
 EOF
