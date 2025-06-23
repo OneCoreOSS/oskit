@@ -1,0 +1,61 @@
+#!/bin/sh
+
+PATH="$PATH:/usr/local/sbin"
+
+CERT_ACTION="$1"
+CERT_FILE="$2"
+
+PrintUsage() {
+	echo " :: Usage: $0 add|remove <cert.pem|cert.crt>"
+	exit 1
+}
+
+[ -z "$CERT_ACTION" ] || [ -z "$CERT_FILE" ] && PrintUsage
+
+case "$CERT_FILE" in
+	*.pem|*.PEM|*.crt|*.CRT) ;;
+	*) echo " !! Certificate must end with .pem or .crt" >&2; exit 1 ;;
+esac
+
+CERT_NAME="$(basename "$CERT_FILE")"
+CERT_BASE="${CERT_NAME%.*}"
+
+TMP_PEM="/tmp/${CERT_BASE}.pem"
+TMP_CRT="/tmp/${CERT_BASE}.crt"
+
+PEM_DIR="/usr/local/etc/ssl/certs"
+CRT_DIR="/usr/local/share/ca-certificates/mozilla"
+
+AddCertificate() {
+	echo " :: Adding certificate '$CERT_FILE'"
+
+	sudo openssl x509 -in "$CERT_FILE" -out "$TMP_PEM" -outform PEM || exit 1
+	sudo cp "$TMP_PEM" "$PEM_DIR/${CERT_BASE}.pem"
+
+	sudo openssl x509 -in "$CERT_FILE" -out "$TMP_CRT" -outform DER || exit 1
+	sudo cp "$TMP_CRT" "$CRT_DIR/${CERT_BASE}.crt"
+
+	sudo update-ca-certificates
+
+	rm -f "$TMP_PEM" "$TMP_CRT"
+	echo " :: Certificate added successfully."
+}
+
+RemoveCertificate() {
+	echo " :: Removing certificate: $CERT_FILE"
+
+	PEM_TARGET="$PEM_DIR/${CERT_BASE}.pem"
+	CRT_TARGET="$CRT_DIR/${CERT_BASE}.crt"
+
+	[ -f "$PEM_TARGET" ] && sudo rm -f "$PEM_TARGET" && echo " :: Removed $PEM_TARGET"
+	[ -f "$CRT_TARGET" ] && sudo rm -f "$CRT_TARGET" && echo " :: Removed $CRT_TARGET"
+
+	sudo update-ca-certificates
+	echo " :: Certificate removed successfully."
+}
+
+case "$CERT_ACTION" in
+	add) AddCertificate ;;
+	remove) RemoveCertificate ;;
+	*) PrintUsage ;;
+esac

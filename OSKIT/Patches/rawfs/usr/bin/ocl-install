@@ -222,8 +222,12 @@ touch "$OS_MNT/mydata.tgz"
 mkdir -p "$BOOT_MNT/grub"
 cat > "$BOOT_MNT/grub/grub.cfg" <<EOF
 set default=0
+set gfxmode=1024x768x32
 set gfxpayload=1024x768x32
-terminal_output gfx
+insmod vbe
+insmod font
+loadfont /grub/fonts/unicode.pf2
+terminal_output gfxterm
 menuentry "OneCore Linux $OS_VERSION" {
 	echo "== Booting OneCore Linux ${OS_VERSION} =="
 	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} rw quiet loglevel=3
@@ -232,7 +236,7 @@ menuentry "OneCore Linux $OS_VERSION" {
 
 menuentry "OneCore Linux $OS_VERSION (No Swap)" {
 	echo "== Booting OneCore Linux ${OS_VERSION} =="
-	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} rw quiet loglevel=3
+	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} noswap rw quiet loglevel=3
 	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
 }
 EOF

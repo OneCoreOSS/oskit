@@ -1,2 +1,6 @@
 #!/bin/sh
 cat /etc/OneCore/OSInfo
+if [ -e "/etc/OneCore/.eoldate" ]; then
+	EXPIRY_DATE=$(date -u -d "@$(cat /etc/OneCore/.eoldate)" +%d-%b-%Y | tr 'a-z' 'A-Z')
+	echo " Expiry Date: $EXPIRY_DATE"
+fi

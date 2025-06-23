@@ -32,6 +32,11 @@ TERMTYPE=`/usr/bin/tty`
 
 echo "    Welcome to OneCore Linux 2025 !"
 echo
+
+if [ -f "/etc/OneCore/.eolchk" ]; then
+	sh "/etc/OneCore/.eolchk"
+fi
+
 if [ -f "/usr/dt/bin/dtlogin" ]; then
 	echo "******************************************************"
 	echo "**"

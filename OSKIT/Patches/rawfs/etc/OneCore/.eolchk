@@ -1,0 +1,59 @@
+#!/bin/sh
+
+EOLDATE="$(cat /etc/OneCore/.eoldate)"
+NOW="$(date +%s)"
+VER="$(cat /etc/OneCore/Semester)"
+
+TimestampToHuman() {
+	date -u -d "@$1" +%d-%b-%Y | tr 'a-z' 'A-Z'
+}
+
+EXPIRY_HUMANDATE=$(date -u -d "@$EOLDATE" +%d-%b-%Y | tr 'a-z' 'A-Z')
+
+if [ "$NOW" -gt "$EOLDATE" ]; then
+	echo
+	echo "=================== END OF LIFE WARNING ==================="
+	echo " Your operating system has reached its End of Life (EOL).  "
+	echo " Please migrate to a newer version to continue receiving   "
+	echo " security updates and support.                             "
+	echo
+	echo " Learn how to upgrade your system:                         "
+	echo "    https://onecore.ct8.pl/articles/MigratingOCL           "
+	echo
+	echo "    OneCore Linux version $VER expired on $EXPIRY_HUMANDATE"
+	echo "==========================================================="
+	echo
+	exit 0
+fi
+
+DAYS30=$((EOLDATE - 2592000))
+DAYS7=$((EOLDATE - 604800))
+
+if [ "$NOW" -ge "$DAYS7" ]; then
+	echo
+	echo "  !! URGENT: END OF LIFE APPROACHING !!"
+	echo
+	echo "  Your OneCore Linux version will reach its End of Life in 7 days."
+	echo "  To ensure continued support and security updates, it's strongly"
+	echo "  recommended to upgrade to the latest version."
+	echo
+	echo "  Learn how to migrate to a newer release: "
+	echo "    https://onecore.ct8.pl/articles/MigratingOCL"
+	echo
+	echo "  REMINDER: Your OS will expire on  $EXPIRY_HUMANDATE"
+	echo
+elif [ "$NOW" -ge "$DAYS30" ]; then
+	echo
+	echo "  !! NOTICE: UPCOMING END OF LIFE !!"
+	echo
+	echo "  Your OneCore Linux version will reach its End of Life soon."
+	echo "  It is recommended that you upgrade to the latest release to"
+	echo "  maintain access to updates and support."
+	echo
+	echo "  Learn how to migrate to a newer version:"
+	echo "    https://onecore.ct8.pl/articles/MigratingOCL"
+	echo
+	echo "  REMINDER: Your OS will expire on  $EXPIRY_HUMANDATE"
+	echo
+fi
+

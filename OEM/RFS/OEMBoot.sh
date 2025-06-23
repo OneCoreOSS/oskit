@@ -4,6 +4,7 @@
 
 echo "   -> Starting install for OPENSSL"
 tce-load -i "/etc/OneCore/OEM/openssl.tcz"
+sleep 1
 echo "   -> Starting install for CA-CERTIFICATES"
 tce-load -i "/etc/OneCore/OEM/ca-certificates.tcz"
 echo "   -> Starting install for APK"
