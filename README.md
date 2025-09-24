@@ -88,7 +88,10 @@ This will apply the OneCore Linux files onto the ``mainline`` edition (which is 
 Once complete, you will have a fully working ``.ISO`` in the ``OUTPUT`` folder.
 
 > [!NOTE] 
-> By default, the OEM Customization include files related to 'ocl-install' and the Reference Desktop Environment (CDE).
+> Note for OCL 3.0: the default OEM Customizations include files related to the Limine bootloader. Disabling OEM will therefore break 'ocl-install'.
+
+> [!NOTE] 
+> Note for OCL 2.X: the default OEM Customizations include files related to 'ocl-install' and the Reference Desktop Environment (CDE).
 
 ## Running
 
@@ -106,6 +109,6 @@ OneCore Linux is a distribution based off of TinyCore Linux. All OS packages pro
 
 Unlike other distributions, OneCore Linux is both a Client and Server distribution. It can be used as a blazingly fast client, or a resilliant server. 
 
-The closed source binaries are not included by default inside of the OSKit. The Linux Kernel used inside of the OSKit was compiled using the [Linux ZEN Kernel (6.10.9-zen1)](https://github.com/zen-kernel/zen-kernel/releases/tag/v6.10.9-zen1) unmodified source code.
+The closed source binaries are not included by default inside of the OSKit. The Linux Kernel used inside of the OSKit was compiled using our [Linux Kernel repository](https://github.com/OneCoreOSS/linux).
 
 OneCore Linux is licensed under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0.html) and comes with ABSOLUTELY NO WARRANTY.
