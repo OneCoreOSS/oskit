@@ -1,13 +1,18 @@
-** You are using the OneCore Linux OSKit addon. (version 25H3)
-**   First you want to rebase the OS using the latest supported TinyCore ISO :
-**    'osrebase latest' - Rebasing from source is not yet supported !
+** You are using the OneCore Linux OSKit addon. (version 3.0)
+**
+**   First, prepare the dependencies required for OneCore Linux :
+**     'prepkit'
+**
+**   Then, rebase the OS using the latest supported TinyCore ISO :
+**     'osrebase latest'
+**
 **   To build all SKUs as ISOs you should do :
-**    'build -media:cdrom -skus:all'
+**     'build -media:cdrom -skus:all'
 **
 **   NEW: You can now build an image with OEM components with :
-**    'build -media:cdrom -skus:all -oem:yes'
+**     'build -media:cdrom -skus:all -oem:yes'
 **
 **   To create a new SKU (rel_main2) :
-**    'osmanage createsku rel_main2 "Release 2"'
+**     'osmanage createsku rel_main2 "Release 2"'
 **
-**   To go back to your OS Shell, simply type 'quit'
+**   To go back to your OS shell, simply type 'quit'

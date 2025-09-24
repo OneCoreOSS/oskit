@@ -1,0 +1,33 @@
+##################################
+# DO NOT RUN THIS SCRIPT DIRECTLY
+# USE WITH OSKIT.
+##################################
+
+BinChk() {
+	BIN_NAME="$1"
+	# Make a backup of IFS because (ba)sh sucks.
+	IFS_BACKUP="$IFS"
+	IFS=':'
+	for DIR in $PATH; do
+		if [ -x "$DIR/$BIN_NAME" ]; then
+			IFS="$IFS_BACKUP"
+			return 0
+		fi
+	done
+	IFS="$IFS_BACKUP"
+	return 1
+}
+
+if ! BinChk "cc"; then
+	echo " !! A valid compiler was not found, please install LLVM/Clang or GNU/GCC."
+	exit 1
+fi
+
+BINLIST="cpio gzip make sort find xorriso zstd unzstd sudo"
+
+for BIN in $BINLIST; do
+	if ! BinChk "$BIN"; then
+		echo " !! '$BIN' is missing or not executable"
+		exit 1
+	fi
+done

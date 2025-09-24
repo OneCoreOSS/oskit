@@ -53,6 +53,7 @@ if [ -f "/usr/dt/bin/dtlogin" ]; then
 				clear
 				echo
 				echo "        Launching the Reference Desktop Environment..."
+				sudo rpcbind
 				sudo mount devpts -t devpts /dev/pts -o remount,mode=666
 				sudo /usr/dt/bin/dtlogin
 				;;

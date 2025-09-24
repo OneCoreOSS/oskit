@@ -1,0 +1,182 @@
+#!/bin/sh
+
+SERVER_URL=""
+if [ -f "/etc/OneCore/SrvURL" ]; then
+	SERVER_URL="$(cat /etc/OneCore/SrvURL)"
+else
+	SERVER_URL="http://onecore.l5.ca"
+fi
+
+if [ -f "$HOME/.OneCore/PactKey" ]; then
+	FILE_URL="$SERVER_URL/NET/Registrations/OCL/$(cat $HOME/.OneCore/PactKey).rp"
+fi
+
+AccessPactList(){
+	if [ ! -z "$FILE_URL" ]; then
+		# Try to download content directly into a variable #
+		REG_RESPONSE="$(wget -UOneCoreNET/OneCoreLinuxV3 -qO - "$FILE_URL")"
+		if [ $? -eq 0 ] && [ -n "$REG_RESPONSE" ]; then
+
+			for PRODUCT in $REG_RESPONSE; do
+				printf "$PRODUCT "
+			done
+		else
+			printf "NetError"
+		fi
+	else
+		printf "KeyError"
+	fi
+}
+
+PactInstall(){
+	PRODUCT="$1"
+	OCLPART=""
+
+	for i in `cat /proc/cmdline`; do
+		case $i in
+			*=*)
+				case $i in
+					oclpart*) OCLPART=${i#*=} ;;
+				esac
+			;;
+		esac
+	done
+
+	if [ "$OCLPART" = "" ]; then
+		echo " !! Cannot find a valid OCLPART. Make sure you are on the latest OneCore Linux version."
+		exit 1
+	else
+		sudo mkdir -p "/tmp/audit/OCLMAIN"
+		sudo mount "/dev/${OCLPART}" "/tmp/audit/OCLMAIN"
+	fi
+	printf " ?? Do you want to install your product '$PRODUCT' (Y/N) "
+	read INSTALL_PRODUCT
+	case "$INSTALL_PRODUCT" in
+		Y|y)
+			sudo mkdir -p "/tmp/audit/OCLMAIN/.products/$PRODUCT"
+			cd "/tmp/audit/OCLMAIN/.products/$PRODUCT"
+			echo " :: Downloading product..."
+			sudo wget -q -U"OneCoreNET/OneCoreLinuxV3" "$SERVER_URL/Distrib/Software/OS/OCL-V3-amd64/$PRODUCT.rpk" -O "Product.rpk"
+			sudo wget -q -U"OneCoreNET/OneCoreLinuxV3" "$SERVER_URL/Distrib/Software/OS/OCL-V3-amd64/$PRODUCT.pkv" -O "Product.pkv"
+			V_HASH="$(cat Product.pkv)"
+			R_HASH="$(sha1sum Product.rpk | awk '{print $1}')"
+
+			if [ "$V_HASH" = "$R_HASH" ]; then
+				echo " :: Extracting product... (this may take a while)"
+				sudo unzip "Product.rpk" 2>/dev/ttyS0
+				if [ -f "./pactinst.sh" ]; then
+					sudo mkdir -p "/tmp/audit/OCLMAIN/PostSetup"
+					if [ -f "/tmp/audit/OCLMAIN/PostSetup/.BootSetup" ]; then
+						sudo rm -f "/tmp/audit/OCLMAIN/PostSetup/.BootSetup"
+					fi
+					echo 'SCRIPT_DIR="$1"' > "/tmp/BS.TMP"
+					echo 'cd "$SCRIPT_DIR"' >> "/tmp/BS.TMP"
+					sudo cp "/tmp/BS.TMP" "/tmp/audit/OCLMAIN/PostSetup/.BootSetup"
+
+					echo " :: Installing product..."
+					sudo sh "./pactinst.sh" "/tmp/audit/OCLMAIN"
+					echo " :: Cleaning product..."
+					cd "/"
+					sudo rm -rf "/tmp/audit/OCLMAIN/.products/$PRODUCT"
+					sudo umount "/tmp/audit/OCLMAIN"
+					echo " :: Product has been installed successfully."
+					echo " :: You will need to reboot for the product to be fully activated."
+					exit 0
+				else
+					echo " !! Product does not support PACT Installation"
+					sudo umount "/tmp/audit/OCLMAIN"
+					exit 1
+				fi
+			else
+				echo " !! Product has failed to verify. Contact vendor for newer version."
+				sudo umount "/tmp/audit/OCLMAIN"
+				exit 1
+			fi
+			continue
+			;;
+		*)
+			continue
+			;;
+	esac
+}
+
+CMD=$1
+ARG=$2
+
+case "$1" in
+	register)
+		if [ -z "$2" ]; then
+			echo " !! Usage: $0 register <key>"
+			exit 1
+		fi
+		echo " :: Registering..."
+		# Check the key if it matches
+		REG_KEY="$2"
+		case "$REG_KEY" in
+			?????-?????-?????)
+				;;
+			*)
+				echo " !! Error: Invalid key format. Use XXXXX-XXXXX-XXXXX."
+				exit 1
+				;;
+		esac
+
+		# Check if key exist in the cloud
+		echo " :: Verifying registration key..."
+
+		# Try to download content directly into a variable #
+		echo "[DEBUG] $FILE_URL is the URL."
+		FILE_URL="$SERVER_URL/NET/Registrations/OCL/${REG_KEY}.rp"
+		REG_RESPONSE="$(wget -UOneCoreNET/OneCoreLinuxV3 -qO - "$FILE_URL")"
+		if [ $? -eq 0 ] && [ -n "$REG_RESPONSE" ]; then
+			echo " :: Registration successful."
+			# Save RegKey to $HOME/.OneCore/PactKey
+			mkdir -p "$HOME/.OneCore"
+			echo "${REG_KEY}" > "$HOME/.OneCore/PactKey"
+		else
+			echo " !! Registration failed."
+			exit 1
+		fi
+		;;
+	list)
+		echo " :: Retrieving Products"
+		PRODUCTS=$(AccessPactList)
+		if [ "$PRODUCTS" = "NetError" ]; then
+			echo " !! Invalid key or network error."
+			exit 1
+		elif [ "$PRODUCTS" = "KeyError" ]; then
+			echo " !! No valid key was found on the system."
+			exit 1
+		else
+			echo
+			echo " == Your Products ================ "
+			for PRODUCT in $PRODUCTS; do
+				echo "   $PRODUCT"
+			done
+			echo " ================================= "
+			echo
+		fi
+		;;
+	install)
+		if [ -z "$2" ]; then
+			echo "Usage: $0 install <product>"
+			exit 1
+		fi
+		echo " :: Retrieving Products"
+		PRODUCTS=$(AccessPactList)
+		if [ "$PRODUCTS" = "NetError" ]; then
+			echo " !! Invalid key or network error."
+		else
+			for PRODUCT in $PRODUCTS; do
+				if [ "$PRODUCT" = "$2" ]; then
+					echo " :: Preparing to install product '$2'"
+					PactInstall "$2"
+				fi
+			done
+		fi
+		;;
+	*)
+		echo "Usage: $0 {register <key>|list|install <product>}"
+		exit 1
+		;;
+esac

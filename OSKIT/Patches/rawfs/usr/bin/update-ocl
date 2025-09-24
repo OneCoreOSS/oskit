@@ -1,13 +1,13 @@
 #!/bin/sh
 
-SEMESTER=$(cat /etc/OneCore/Semester)
+SEMESTER=$(cat /etc/OneCore/OSVer)
 
 OSSKU=$(cat /etc/OneCore/OSSku)
-OSTYPE="Client"
+OSTYPE="Unified"
 OSARCH="amd64"
 
 PREFIX="${SEMESTER}.${OSSKU}"
-BASE_URL="http://onecore.ct8.pl/Distrib/OS/Updates"
+BASE_URL="http://onecore.l5.ca/Distrib/OS/Updates"
 
 VER_URL="${BASE_URL}/${PREFIX}.VER"
 NFO_URL="${BASE_URL}/${PREFIX}.NFO"
@@ -74,7 +74,7 @@ if [ "$REMOTE_BUILD" -gt "$LOCAL_BUILD" ]; then
 			fi
 
 			echo " :: Downloading latest release '$NFO_CONTENT'"
-			LATEST_RELEASE_URL="http://onecore.ct8.pl/Distrib/OS/ISOs/OCL-${SEMESTER}.${OSTYPE}-${OSARCH}.iso"
+			LATEST_RELEASE_URL="http://onecore.l5.ca/Distrib/OS/ISOs/OCL-${SEMESTER}.${OSTYPE}-${OSARCH}.iso"
 			OSUPDATE_FILE="/tmp/OSUpdate"
 			wget "$LATEST_RELEASE_URL" -O "$OSUPDATE_FILE"
 			if [ $? -ne 0 ]; then

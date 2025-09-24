@@ -1,12 +1,8 @@
 #!/bin/sh
 
-### BACKGROUND SVCS : INSTALL OPENSSL, CA-CERTIFICATES, APK ###
-
-echo "   -> Starting install for OPENSSL"
-tce-load -i "/etc/OneCore/OEM/openssl.tcz"
-sleep 1
-echo "   -> Starting install for CA-CERTIFICATES"
-tce-load -i "/etc/OneCore/OEM/ca-certificates.tcz"
-echo "   -> Starting install for APK"
-tce-load -i "/etc/OneCore/OEM/apk.tcz"
-
+while true; do
+	sleep 3
+	if [ ! -f /usr/local/bin/limine ]; then
+		tce-load -i "/etc/OneCore/OEM/limine.tcz"
+	fi
+done

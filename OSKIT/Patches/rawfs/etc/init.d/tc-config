@@ -507,6 +507,15 @@ if [ -n "$ONECORE_OEMBOOT" ]; then
 	fi
 fi
 
+if [ -n "$ONECORE_PART" ]; then
+	if [ -d "/mnt/$ONECORE_PART/Modules" ]; then
+		sudo mv "/lib/modules/$(uname -r)" "/lib/modules/.old"
+		sudo ln -sf "/mnt/$ONECORE_PART/Modules" "/lib/modules/$(uname -r)"
+		sudo udevadm control --reload
+		sudo udevadm trigger
+	fi
+fi
+
 [ -n "$XSETUP" ] && touch /tmp/xsetup_requested
 
 if [ -n "$LAPTOP" ]; then
@@ -661,7 +670,7 @@ if [ -n "$ONECORE_ASKSETUP" ]; then
 	while true; do
 		echo "************************************************************"
 		echo "**"
-		echo "**            OneCore Linux 2025, version $(cat /etc/OneCore/Semester)"
+		echo "**            OneCore Linux 2025, version $(cat /etc/OneCore/OSVer)"
 		echo "**                 ===== USER PROMPT ====="
 		echo "**"
 		echo "**  Pick an option."
@@ -696,14 +705,16 @@ if [ -n "$ONECORE_PART" ]; then
 	if [ -f "/mnt/$ONECORE_PART/PostSetup/.BootSetup" ]; then
 		clear
 		echo "==================================="
-		echo " OneCore Linux is now entering     "
-		echo " PHASE 2 of setup. Do not reboot.  "
+		echo " OneCore Linux is now setting up   "
+		echo " your products. Please wait.       "
 		echo "==================================="
 		echo
 		sleep 10 # yes this sucks but we must wait for network to initializate (because we boot too quickly)
 		mv /sbin/reboot /sbin/reboot.bin
-		sudo -u "$USER" sh "/mnt/$ONECORE_PART/PostSetup/.BootSetup" >/dev/ttyS0
+		cd "/mnt/$ONECORE_PART/PostSetup/"
+		sudo -u "$USER" sh "/mnt/$ONECORE_PART/PostSetup/.BootSetup" "/mnt/$ONECORE_PART/PostSetup" >/dev/ttyS0
 		mv /sbin/reboot.bin /sbin/reboot
+		cd "/"
 		rm -rf "/mnt/$ONECORE_PART/PostSetup"
 		echo
 		echo "PHASE 2 COMPLETE !"
@@ -711,4 +722,12 @@ if [ -n "$ONECORE_PART" ]; then
 		sleep 5
 		reboot
 	fi
+fi
+
+if [ -f "/usr/local/share/OneCore/.eoldate" ]; then
+	sudo cp "/usr/local/share/OneCore/.eoldate" "/etc/OneCore/.eoldate"
+fi
+
+if [ -f "/usr/local/bin/kmscon" ]; then
+	/usr/local/bin/kmscon -l /bin/login
 fi

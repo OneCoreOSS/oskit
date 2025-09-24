@@ -1,11 +1,15 @@
 #!/bin/sh
 ##############################
-# OSKit 1.0
+# OSKit for OCL 3.0
 #  $ source SETENV.SH
 ##############################
 
-# OSKit Vars
 OSK_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if ! sh "$OSK_ROOT/OSKIT/DepChk"; then
+	 return 1
+fi
+
+# OSKit Vars
 OSK_DATA="$OSK_ROOT/OSKIT"
 OSK_ADDONS="$OSK_DATA/Addons"
 OSK_HELP="$OSK_DATA/UserHelp"

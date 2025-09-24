@@ -1,257 +1,369 @@
 #!/bin/sh
-set -e
 
-tceflight dialog dosfstools parted grub2-multi
-clear
+SERVER_URL=""
+if [ -f "/etc/OneCore/SrvURL" ]; then
+	SERVER_URL="$(cat /etc/OneCore/SrvURL)"
+else
+	SERVER_URL="http://onecore.l5.ca"
+fi
 
-OS_VERSION="$(cat /etc/OneCore/Semester)"
-OS_TYPE="Client"
-OS_ARCH="amd64"
+printf " :: Do you have a registration key? (Y/N) "
+read HAS_KEY
 
-BOOT_MNT="/mnt/boot"
-OS_MNT="/mnt/os"
-ISO_MNT="/mnt/cdrom"
+PRODUCTS=""
+TCZ_TOINSTALL=""
 
-cat /etc/OneCore/Splash
-echo "*******************************************"
-echo "** OneCore Linux Setup"
-echo "** Version $OS_VERSION"
-echo "*******************************************"
+case "$HAS_KEY" in
+	Y|y)
+		while true; do
+			printf " :: Enter your registration key (format: XXXXX-XXXXX-XXXXX): "
+			read REG_KEY
+
+			# Check if format is correct #
+			case "$REG_KEY" in
+				?????-?????-?????)
+					;;
+				*)
+					echo " !! Error: Invalid key format. Use XXXXX-XXXXX-XXXXX."
+					continue
+					;;
+			esac
+
+			FILE_URL="$SERVER_URL/NET/Registrations/OCL/${REG_KEY}.rp"
+
+			echo " :: Verifying registration key..."
+
+			# Try to download content directly into a variable #
+			REG_RESPONSE="$(wget -UOneCoreNET/OneCoreLinuxV3 -qO - "$FILE_URL")"
+			if [ $? -eq 0 ] && [ -n "$REG_RESPONSE" ]; then
+				echo " :: Registration successful."
+
+				echo " :: You have the following registered products available:"
+				echo
+
+				for PRODUCT in $REG_RESPONSE; do
+					echo "        $PRODUCT"
+				done
+				echo
+
+				printf " ?? Is this correct? (Y/N) "
+				read IS_CORRECT
+				case "$IS_CORRECT" in
+					Y|y)
+						PRODUCTS="$REG_RESPONSE"
+						echo " :: Registration confirmed."
+						break
+						;;
+					*)
+						echo " !! Error: Registration rejected by user. Restarting..."
+						continue
+						;;
+				esac
+			else
+				echo " !! Error: Invalid registration key or network issue."
+				printf " ?? Would you like to try again? (Y/N) "
+				read TRY_AGAIN
+				case "$TRY_AGAIN" in
+					Y|y)
+						continue
+						;;
+					*)
+						echo " :: Skipping product registration."
+						break
+						;;
+				esac
+			fi
+		done
+		;;
+	*)
+		echo " :: Skipping product registration."
+		;;
+esac
+
+EnumDisks(){
+	for DEV in /sys/block/*; do
+		NAME="$(basename "$DEV")"
+		case "$NAME" in
+			loop*|ram*) continue ;;
+		esac
+		if [ -b "/dev/$NAME" ]; then
+			echo "        /dev/$NAME"
+		fi
+	done
+}
+
 echo
-echo "You are running OneCore Linux ( $(cat /etc/OneCore/OSBld) )"
-sleep 2
+echo " :: The following drives have been found on your device:"
+EnumDisks
+echo
 
-prompt() {
-	while :; do
-		ans="$(dialog --clear --title "Input Required" \
-			--inputbox "$1" 0 80 3>&1 1>&2 2>&3)"
-		status=$?
-		clear
-		if [ $status -ne 0 ]; then
-			echo "Aborted."
-			exit 1
-		fi
-		[ -n "$ans" ] || continue
-		if [ -n "$3" ]; then
-			echo "$ans" | grep -Eq "$3" || continue
-		fi
-		eval "$2=\$ans"
-		break
-	done
-}
+while true; do
+	printf " :: Select the drive on which you want to install OCL: "
+	read INSTALL_DRIVE
 
-# == src media ==
-
-SOURCE="$(dialog --clear --title "Select Installation Source" \
-	--menu "Choose source:" 0 80 2 \
-	1 "Cloud Install" \
-	2 "Local Install" 3>&1 1>&2 2>&3)"
-clear
-[ -n "$SOURCE" ] || exit 1
-
-mkdir -p "$ISO_MNT"
-if [ "$SOURCE" = 2 ]; then
-	if mount | grep -q "$ISO_MNT"; then
-		umount "$ISO_MNT"
+	if [ -b "$INSTALL_DRIVE" ]; then
+		printf " ?? You selected $INSTALL_DRIVE. Confirm? (Y/N) "
+		read CONFIRM
+		case "$CONFIRM" in
+			Y|y)
+				echo " :: Drive selected: $INSTALL_DRIVE"
+				break
+				;;
+			*)
+				echo
+				echo " :: The following drives have been found on your device:"
+				EnumDisks
+				continue
+				;;
+		esac
+	else
+		echo " !! Error: Invalid drive. Choose again."
 	fi
-	mount /dev/sr0 "$ISO_MNT"
-else
-	ISO_URL="http://onecore.ct8.pl/Distrib/OS/ISOs/OCL-${OS_VERSION}.${OS_TYPE}-${OS_ARCH}.iso"
-	if mount | grep -q "$ISO_MNT"; then
-		umount "$ISO_MNT"
-	fi
-	wget -q -O /tmp/onecore.iso "$ISO_URL"
-	mount -o loop /tmp/onecore.iso "$ISO_MNT"
-fi
+done
 
-if [ ! -f "$ISO_MNT/boot/vmlinuz" ] || [ ! -f "$ISO_MNT/boot/onecore64.gz" ]; then
-	echo "ERROR: Missing vmlinuz or onecore64.gz in ISO."
-	exit 1
-fi
+printf " :: Do you want to install a desktop environment? (Y/N) "
+read INSTALL_DE
 
-list_disks() {
-	echo "== Available disks =="
-	for d in /dev/sd[a-z] /dev/vd[a-z]; do
-		[ -b "$d" ] && echo "  $d"
-	done
-	return 0
-}
-
-list_parts() {
-	echo "== Available partitions on '$1' =="
-	parted -s "$1" print | awk '/^ [0-9]/{print "  "$1": "$2" "$3}'
-	return 0
-}
-
-# == install mode part select needs to be checked ==
-MODE="$(dialog --clear --title "Partitioning Mode" \
-	--menu "Install mode (destroys data if whole-disk):" 0 80 2 \
-	1 "Use whole disk" \
-	2 "Use existing partitions" 3>&1 1>&2 2>&3)"
-clear
-[ -n "$MODE" ] || exit 1
-
-if [ "$MODE" = 1 ]; then
-	list_disks
+if [ "$INSTALL_DE" = "Y" ] || [ "$INSTALL_DE" = "y" ]; then
 	echo
-	prompt "Target disk (e.g. /dev/sda):" DISK '^/dev/[sv]d[a-z]$'
+	OPTIONS=""
+	COUNT=1
 
-	dialog --clear --title "! WARNING !" --yesno "!!! ALL DATA ON $DISK WILL BE DESTROYED !!!\n\nProceed?" 8 80
-	if [ $? -ne 0 ]; then clear; echo "Aborted."; exit 1; fi
-	clear
-
-	if [ -d /sys/firmware/efi ]; then
-		LABEL=gpt
-	else
-		LABEL=msdos
+	if echo "$PRODUCTS" | grep -qw "OneCore-RDE"; then
+		echo "        $COUNT. Reference Desktop Environment"
+		OPTIONS="$OPTIONS RDE"
+		COUNT=$((COUNT+1))
 	fi
-	parted -s "$DISK" mklabel "$LABEL"
-	parted -s "$DISK" mkpart primary fat32 1MiB 513MiB
-	parted -s "$DISK" set 1 boot on
-	parted -s "$DISK" mkpart primary ext4 513MiB 100%
-	BOOT_PART="${DISK}1"
-	OS_PART="${DISK}2"
-else
-	list_disks
+
+	if echo "$PRODUCTS" | grep -qw "OCL-X11TWM"; then
+		echo "        $COUNT. twm"
+		OPTIONS="$OPTIONS twm"
+		COUNT=$((COUNT+1))
+	fi
+
+	echo "        $COUNT. jwm"
+	OPTIONS="$OPTIONS jwm"
+	COUNT=$((COUNT+1))
+
+	echo "        $COUNT. icewm"
+	OPTIONS="$OPTIONS icewm"
+	COUNT=$((COUNT+1))
+
+	echo "        $COUNT. fluxbox"
+	OPTIONS="$OPTIONS fluxbox"
+
 	echo
-	prompt "Selected Disk (e.g. /dev/sda) : " DISK '^/dev/[sv]d[a-z]$'
+	while true; do
+		printf " :: Select desktop environment by number: "
+		read DE_CHOICE
 
-	CHOICE="$(dialog --clear --title "Partitions" \
-		--menu "Use existing or create new partitions?" 0 80 2 \
-		1 "Create new partitions" \
-		2 "Use existing partitions" 3>&1 1>&2 2>&3)"
-	clear
-	[ -n "$CHOICE" ] || exit 1
+		SELECTED="$(echo $OPTIONS | cut -d' ' -f$DE_CHOICE)"
 
-	if [ "$CHOICE" = 1 ]; then
-		if [ -d /sys/firmware/efi ]; then
-			LABEL=gpt
-		else
-			LABEL=msdos
-		fi
-		parted -s "$DISK" mklabel "$LABEL"
-		parted -s "$DISK" mkpart primary fat32 1MiB 513MiB
-		parted -s "$DISK" set 1 boot on
-		parted -s "$DISK" mkpart primary ext4 513MiB 100%
-		BOOT_PART="${DISK}1"
-		OS_PART="${DISK}2"
-	else
-		list_parts "$DISK"
-		echo
-		prompt "Boot partition number (e.g. 1):" BIDX '^[0-9]+$'
-		prompt "OS partition number  (e.g. 2):" OIDX '^[0-9]+$'
-		BOOT_PART="${DISK}${BIDX}"
-		OS_PART="${DISK}${OIDX}"
-	fi
+		case "$SELECTED" in
+			RDE)
+				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d rpcbind motif"
+				break
+				;;
+			twm)
+				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d"
+				break
+				;;
+			jwm)
+				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d jwm"
+				break
+				;;
+			icewm)
+				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d icewm"
+				break
+				;;
+			fluxbox)
+				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d fluxbox"
+				break
+				;;
+			*)
+				echo " !! Error: Invalid selection."
+				;;
+		esac
+	done
 fi
 
-# == install type either ram or disk boot ==
-ITYPE="$(dialog --clear --title "Installation Type" \
-	--menu "Choose boot mode:" 0 80 2 \
-	1 "OneCore Linux (RAM Boot) [Recommended]" \
-	2 "OneCore Linux (Disk Boot) [UNSTABLE]" 3>&1 1>&2 2>&3)"
-clear
-[ -n "$ITYPE" ] || exit 1
+BASE_SOURCE=""
 
-mkfs.vfat -F32 "$BOOT_PART"
-mkfs.ext4 "$OS_PART"
+while true; do
+	echo " :: From where should the Base OS be installed?"
+	echo
+	echo "        1. From the Cloud"
+	echo "        2. From the Install Media"
+	echo
+	printf " :: Select an option (1/2): "
+	read BASE_CHOICE
 
-mkdir -p "$BOOT_MNT" "$OS_MNT"
-mount "$BOOT_PART" "$BOOT_MNT"
-mount "$OS_PART" "$OS_MNT"
+	case "$BASE_CHOICE" in
+		1)
+			BASE_SOURCE="Cloud"
+			break
+			;;
+		2)
+			BASE_SOURCE="InstallMedia"
+			break
+			;;
+		*)
+			echo " !! Error: Invalid selection."
+			;;
+	esac
+done
 
-cp "$ISO_MNT/boot/vmlinuz" "$BOOT_MNT/Kernel"
-if [ "$ITYPE" = 1 ]; then
-	cp "$ISO_MNT/boot/onecore64.gz" "$BOOT_MNT/OS.gz"
-else
-	cp "$ISO_MNT/boot/onecore64.gz" "/tmp/OS.gz"
-	(cd "$OS_MNT" && gunzip -c /tmp/OS.gz | cpio -idmv)
-fi
 
-UXTYPE="$(dialog --clear --title "User Experience" \
-	--menu "Select your User Experience" 0 80 2 \
-	1 "[NEW] Reference Desktop Environment (CDE)" \
-	2 "Xorg/JWM" \
-	3 "Xorg/icewm" \
-	4 "Xorg/fluxbox" \
-	5 "No User Experience" 3>&1 1>&2 2>&3)"
-clear
-[ -n "$ITYPE" ] || exit 1
+echo " ************************************************ "
+echo " **       OneCore Linux V3 Installation           "
+echo " **                                               "
+echo " **  Install on: $INSTALL_DRIVE                   "
+echo " **  Products:                                    "
+for PRODUCT in $PRODUCTS; do
+	echo " **    - $PRODUCT"
+done
+echo " **  Install Source: $BASE_SOURCE                 "
+echo " **                                               "
+echo " ************************************************ "
 
-mkdir -p "$OS_MNT/PostSetup"
-SOLO_PART="$(echo $OS_PART | sed 's/\/dev\///')"
+while true; do
+	printf " ?? Is the information above correct? (Y/N) "
+	read CONFIRM_INFO
 
-mkdir -p "$OS_MNT/PostSetup/TCEs"
+	case "$CONFIRM_INFO" in
+		Y|y)
+			INFO_CONFIRMED=1
+			break
+			;;
+		N|n)
+			INFO_CONFIRMED=0
+			break
+			;;
+		*)
+			echo " !! Error: Invalid input."
+			;;
+	esac
+done
 
-if [ "$UXTYPE" = 1 ]; then
-	if [ "$SOURCE" = 2 ]; then
-		echo "    -> Copying RDE"
-		cp "$ISO_MNT/OEM/"/RDE/*.tcz* "$OS_MNT/PostSetup/TCEs/"
-	else
-		echo "    -> Downloading RDE"
-		MISCPKG_URL="http://onecore.ct8.pl/Distrib/Software/OS/OCL-${OS_VERSION}-${OS_ARCH}"
-		wget $MISCPKG_URL/bdftopcf.tcz -O "$OS_MNT/PostSetup/TCEs/bdftopcf.tcz"
-		wget $MISCPKG_URL/cde.tcz -O "$OS_MNT/PostSetup/TCEs/cde.tcz"
-		wget $MISCPKG_URL/cde.tcz.dep -O "$OS_MNT/PostSetup/TCEs/cde.tcz.dep"
-		wget $MISCPKG_URL/ksh.tcz -O "$OS_MNT/PostSetup/TCEs/ksh.tcz"
-		wget $MISCPKG_URL/sessreg.tcz -O "$OS_MNT/PostSetup/TCEs/sessreg.tcz"
-		wget $MISCPKG_URL/xrdb.tcz -O "$OS_MNT/PostSetup/TCEs/xrdb.tcz"
-	fi
-	echo "tce-load -wi Xfbdev Xorg-7.7-3d rpcbind motif" > "$OS_MNT/PostSetup/.BootSetup"
-	echo "sudo echo \"cde.tcz\" >> /mnt/$SOLO_PART/tce/onboot.lst" >> "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$UXTYPE" = 2 ]; then
-	echo "tce-load -wi Xfbdev Xorg-7.7-3d jwm" > "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$UXTYPE" = 3 ]; then
-	echo "tce-load -wi Xfbdev Xorg-7.7-3d icewm" > "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$UXTYPE" = 4 ]; then
-	echo "tce-load -wi Xfbdev Xorg-7.7-3d fluxbox" > "$OS_MNT/PostSetup/.BootSetup"
-elif [ "$UXTYPE" = 5 ]; then
-	echo "# No User Experience" > "$OS_MNT/PostSetup/.BootSetup"
-fi
-
-echo "    -> Copying OpenSSL, Certificates and APK"
-cp "/etc/OneCore"/OEM/apk.tcz* "$OS_MNT/PostSetup/TCEs/"
-echo "tce-load -wi openssl ca-certificates" >> "$OS_MNT/PostSetup/.BootSetup"
-echo "sudo mv /mnt/$SOLO_PART/PostSetup/TCEs/*.* /mnt/$SOLO_PART/tce/optional/" >> "$OS_MNT/PostSetup/.BootSetup"
-echo "sudo echo \"apk.tcz\" >> /mnt/$SOLO_PART/tce/onboot.lst" >> "$OS_MNT/PostSetup/.BootSetup"
-
-umount "$ISO_MNT"
-
-mkdir -p "$OS_MNT/tce"
-touch "$OS_MNT/mydata.tgz"
-mkdir -p "$BOOT_MNT/grub"
-cat > "$BOOT_MNT/grub/grub.cfg" <<EOF
-set default=0
-set gfxmode=1024x768x32
-set gfxpayload=1024x768x32
-insmod vbe
-insmod font
-loadfont /grub/fonts/unicode.pf2
-terminal_output gfxterm
-menuentry "OneCore Linux $OS_VERSION" {
-	echo "== Booting OneCore Linux ${OS_VERSION} =="
-	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} rw quiet loglevel=3
-	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
-}
-
-menuentry "OneCore Linux $OS_VERSION (No Swap)" {
-	echo "== Booting OneCore Linux ${OS_VERSION} =="
-	linux /Kernel$([ "$ITYPE" -eq 2 ] && echo " root=${OS_PART}") tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${BOOT_PART} root=${OS_PART} noswap rw quiet loglevel=3
-	$([ "$ITYPE" -eq 1 ] && echo "initrd /OS.gz")
-}
-EOF
-
+#sudo -u oc tce-load -wi parted dosfstools
+tceflight parted dosfstools
 if [ -d /sys/firmware/efi ]; then
-	grub-install --target=x86_64-efi --efi-directory="$BOOT_MNT" --boot-directory="$BOOT_MNT" "$DISK"
+	echo " :: Detected EFI system"
+	parted -s "$INSTALL_DRIVE" mklabel gpt
+
+	echo " :: Creating EFI System Partition (OCLBOOT)"
+	parted -s "$INSTALL_DRIVE" mkpart OCLBOOT fat32 1MiB 301MiB
+	parted -s "$INSTALL_DRIVE" set 1 esp on
+
+	echo " :: Creating Linux Partition (OCLMAIN)"
+	parted -s "$INSTALL_DRIVE" mkpart OCLMAIN ext4 301MiB 100%
 else
-	grub-install --target=i386-pc  --boot-directory="$BOOT_MNT" "$DISK"
+	echo " :: Detected BIOS system"
+	parted -s "$INSTALL_DRIVE" mklabel msdos
+
+	echo " :: Creating Bootable Linux Partition (OCLBOOT)"
+	parted -s "$INSTALL_DRIVE" mkpart primary ext4 1MiB 301MiB
+	parted -s "$INSTALL_DRIVE" set 1 boot on
+
+	echo " :: Creating Linux Partition (OCLMAIN)"
+	parted -s "$INSTALL_DRIVE" mkpart primary ext4 301MiB 100%
 fi
 
-umount "$BOOT_MNT" "$OS_MNT"
+echo " :: Formatting partitions"
+mkfs.vfat -F32 "${INSTALL_DRIVE}1"
+mkfs.ext4 -F "${INSTALL_DRIVE}2"
+
+echo " :: Installing bootloader"
+limine bios-install "$INSTALL_DRIVE"
+
+echo " :: Mounting OCLBOOT for configuration"
+mkdir -p "/tmp/audit/OCLBOOT"
+mkdir -p "/tmp/audit/OCLMAIN"
+mkdir -p "/tmp/audit/OCLMEDIA"
+
+mount "${INSTALL_DRIVE}1" "/tmp/audit/OCLBOOT"
+mkdir -p "/tmp/audit/OCLBOOT/boot/limine"
+if [ -d /sys/firmware/efi ]; then
+	echo " :: Copying EFI files"
+	mkdir -p "/tmp/audit/OCLBOOT/EFI/BOOT/"
+	cp "/usr/local/share/limine/BOOTX64.EFI" "/tmp/audit/OCLBOOT/EFI/BOOT/"
+else
+	echo " :: Copying BIOS files"
+	cp "/usr/local/share/limine/limine-bios.sys" "/tmp/audit/OCLBOOT/boot/limine/"
+fi
+
+echo " :: Creating bootloader config"
+SOLO_PART="$(echo "${INSTALL_DRIVE}2" | sed 's|/dev/||')"
+
+echo "timeout: 5" > "/tmp/audit/OCLBOOT/boot/limine/limine.conf"
+echo "/OneCore Linux V$(cat /etc/OneCore/OSVer)" >> "/tmp/audit/OCLBOOT/boot/limine/limine.conf"
+echo "    protocol: linux" >> "/tmp/audit/OCLBOOT/boot/limine/limine.conf"
+echo "    kernel_path: boot():/boot/vmlinuz" >> "/tmp/audit/OCLBOOT/boot/limine/limine.conf"
+echo "    module_path: boot():/boot/onecore64.gz" >> "/tmp/audit/OCLBOOT/boot/limine/limine.conf"
+echo "    cmdline: quiet rw loglevel=3< vga=792 xvesa=1024x768x32 tce=${SOLO_PART} opt=${SOLO_PART} home=${SOLO_PART} oclpart=${SOLO_PART} syspart=${INSTALL_DRIVE}1 root=${INSTALL_DRIVE}2" >> "/tmp/audit/OCLBOOT/boot/limine/limine.conf"
+
+if [ "$BASE_SOURCE" = "InstallMedia" ]; then
+	echo " :: Copying Base OS "
+	mount "/dev/sr0" "/tmp/audit/OCLMEDIA"
+	cp "/tmp/audit/OCLMEDIA/boot/vmlinuz" "/tmp/audit/OCLBOOT/boot/vmlinuz"
+	cp "/tmp/audit/OCLMEDIA/boot/onecore64.gz" "/tmp/audit/OCLBOOT/boot/onecore64.gz"
+	umount "/tmp/audit/OCLMEDIA"
+else
+	echo " :: Downloading Base OS"
+	wget -q -U"OneCoreNET/OneCoreLinuxV3" "$SERVER_URL/ipxe/OCL/V3/vmlinuz" -O "/tmp/audit/OCLBOOT/boot/vmlinuz"
+	wget -q -U"OneCoreNET/OneCoreLinuxV3" "$SERVER_URL/ipxe/OCL/V3/onecore64.gz" -O "/tmp/audit/OCLBOOT/boot/onecore64.gz"
+fi
+
+echo " :: Unmounting OCLBOOT"
+umount "/tmp/audit/OCLBOOT"
+
+echo " :: Mounting OCLMAIN"
+mount "${INSTALL_DRIVE}2" "/tmp/audit/OCLMAIN"
+
+mkdir -p "/tmp/audit/OCLMAIN/PostSetup"
+mkdir -p "/tmp/audit/OCLMAIN/tce/optional"
+echo 'SCRIPT_DIR="$1"' > "/tmp/audit/OCLMAIN/PostSetup/.BootSetup"
+echo 'cd "$SCRIPT_DIR"' >> "/tmp/audit/OCLMAIN/PostSetup/.BootSetup"
+echo "tce-load -wi $TCZ_TOINSTALL" >> "/tmp/audit/OCLMAIN/PostSetup/.BootSetup"
+echo "echo tce-load oc tce-load -wi $TCZ_TOINSTALL" >> "/tmp/audit/OCLMAIN/PostSetup/.BootSetup"
 echo
-echo "== OneCore Linux has been installed successfully =="
-echo
-echo "Thank you for using OneCore Linux !"
-echo
-echo "You may now reboot your system and boot into your newly installed Operating System."
-echo
+for PRODUCT in $REG_RESPONSE; do
+	printf " ?? Do you want to install your product '$PRODUCT' (Y/N) "
+	read INSTALL_PRODUCT
+	case "$INSTALL_PRODUCT" in
+		Y|y)
+			mkdir -p "/tmp/audit/OCLMAIN/.products/$PRODUCT"
+			cd "/tmp/audit/OCLMAIN/.products/$PRODUCT"
+			echo " :: Downloading product..."
+			wget -q -U"OneCoreNET/OneCoreLinuxV3" "$SERVER_URL/Distrib/Software/OS/OCL-V3-amd64/$PRODUCT.rpk" -O "Product.rpk"
+			wget -q -U"OneCoreNET/OneCoreLinuxV3" "$SERVER_URL/Distrib/Software/OS/OCL-V3-amd64/$PRODUCT.pkv" -O "Product.pkv"
+			V_HASH="$(cat Product.pkv)"
+			R_HASH="$(sha1sum Product.rpk | awk '{print $1}')"
+
+			if [ "$V_HASH" = "$R_HASH" ]; then
+				echo " :: Extracting product... (this may take a while)"
+				unzip "Product.rpk" 2>/dev/ttyS0
+				if [ -f "./pactinst.sh" ]; then
+					echo " :: Installing product..."
+					sh "./pactinst.sh" "/tmp/audit/OCLMAIN"
+					echo " :: Cleaning product..."
+					cd "/"
+					rm -rf "/tmp/audit/OCLMAIN/.products/$PRODUCT"
+				else
+					echo " !! Product does not support PACT Installation"
+				fi
+			else
+				echo " !! Product has failed to verify. Contact vendor for newer version."
+			fi
+			continue
+			;;
+		*)
+			continue
+			;;
+	esac
+done
+
+echo " :: Unmounting OCLMAIN"
+umount "/tmp/audit/OCLMAIN"
+
+echo " :: Done"

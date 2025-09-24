@@ -2,7 +2,7 @@
 
 > [!NOTE] 
 > OSKit is not a universal environment. This version of OSKit has been specifically designed for the following operating system:
-> **OneCore Linux 2025, version 25H3**
+> **OneCore Linux 2025, version 3.0**
 
 OneCore OSKit is a powerful developer environment designed for building and customizing OneCore Linux 2025 images.
 
@@ -43,14 +43,22 @@ Before using OneCore OSKit, ensure you have the following:
 
    In order to use the OSKit, you will **always** need to initialize the environment beforehand:
 
- ```bash
+```bash
  $ source SETENV.SH
  <OSKit welcome message>
 ```
 
+   Then you will need to download the OneCore Linux dependencies using **prepkit** (NOTE: You only need to do this once.)
+
+```bash
+ % prepkit
+```
+
+   This will compile the bootloader, kernel and everything else you need to build OneCore Linux.
+
 3. **Rebase the OSKit with latest TinyCore Linux version**
 
-   Once the OSKit addons are were loaded from step **2**, rebase the OSKit :
+   Once the OSKit addons were loaded from step **2**, rebase the OSKit :
 
 ```bash
  % osrebase latest
@@ -68,7 +76,7 @@ This will apply the OneCore Linux files onto the ``mainline`` edition (which is 
 
 **NEW: Build an OEM Image**
 
-   OneCore Linux 25H2 has introduced a brand new feature to OSKit ; OEM Images.
+   OneCore Linux 2.1 has introduced a brand new feature to OSKit ; OEM Images.
 
    OEM Images lets you customize OneCore Linux however much you want, across EVERY built editions !
 
@@ -84,7 +92,7 @@ Once complete, you will have a fully working ``.ISO`` in the ``OUTPUT`` folder.
 
 ## Running
 
-Since version 25H2, you can now run OneCore Linux with ease using the "run" kit !
+Since version 2.1, you can now run OneCore Linux with ease using the "run" kit !
 
 Simply 'run' your built edition and it will launch a QEMU X86 Virtual Machine with the recommended options.
 

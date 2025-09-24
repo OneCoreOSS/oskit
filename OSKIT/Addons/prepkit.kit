@@ -1,0 +1,52 @@
+##################################
+# DO NOT RUN THIS SCRIPT DIRECTLY
+# USE WITH OSKIT.
+##################################
+
+set -e
+
+mkdir -p "$OSK_ROOT/OSK_DEPS"
+cd "$OSK_ROOT/OSK_DEPS"
+
+if [ ! -d "$OSK_ROOT/OSK_DEPS/Limine" ]; then
+	echo " :: Downloading Limine bootloader"
+	LIMINE_VER="10.0.1"
+	wget https://codeberg.org/Limine/Limine/releases/download/v${LIMINE_VER}/limine-${LIMINE_VER}.tar.bz2
+	tar -xf limine-${LIMINE_VER}.tar.bz2
+	rm -f limine-${LIMINE_VER}.tar.bz2
+	mv limine* Limine
+fi
+
+
+if [ ! -d "$OSK_ROOT/OSK_DEPS/Linux" ]; then
+	echo " :: Downloading Linux Kernel"
+	git clone --depth 1 https://github.com/OneCoreOSS/linux Linux
+fi
+
+echo " :: Compiling Limine"
+mkdir -p "$OSK_ROOT/OSK_DEPS/Limine/Build.OCL"
+cd "$OSK_ROOT/OSK_DEPS/Limine/Build.OCL"
+../configure --enable-bios-cd --enable-uefi-cd
+make -j$(nproc --all)
+DESTDIR="$OSK_ROOT/OSK_DEPS/X86_64.BIN/Limine" make install
+
+echo " :: Compiling Linux"
+cd "$OSK_ROOT/OSK_DEPS/Linux"
+bash mklatest.sh
+
+echo " :: Installing Linux modules & headers into OSK_DEPS"
+
+LINUX_SRC_DIR="$(cat $OSK_ROOT/OSK_DEPS/Linux/LatestCompile)"
+make modules_install INSTALL_MOD_PATH="$OSK_ROOT/OSK_DEPS/X86_64.BIN/Linux/Kernel.bin"
+make headers_install INSTALL_HDR_PATH="$OSK_ROOT/OSK_DEPS/X86_64.BIN/Linux/Kernel.dev"
+cp "$OSK_ROOT/OSK_DEPS/Linux/arch/x86/boot/bzImage" "$OSK_ROOT/OSK_DEPS/X86_64.BIN/Linux/Kernel"
+
+echo " :: Extracting modules as TCL does not support compressed modules"
+cd "$OSK_ROOT/OSK_DEPS/X86_64.BIN/Linux/Kernel.bin"
+find . -type f -name "*.ko.zst" -exec sudo sh -c 'unzstd -f "$1" -o "${1%.zst}" && sudo rm -f "$1"' _ {} \;
+
+touch "$OSK_ROOT/OSK_DEPS/Ready"
+
+echo " :: Done."
+
+# TODO: Build RDE, KMSCON & Limine inside of a container for true source builds.

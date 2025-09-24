@@ -27,7 +27,7 @@ for pkg in "$@"; do
 	DEPARR="$DEPARR $pkg.tcz"
 done
 
-echo ":: Building dependency list for: $*"
+echo " :: Building dependency list for: $*"
 
 UpdDeps() {
 	pkg="$1"
@@ -51,20 +51,20 @@ UpdDeps() {
 
 for pkg in "$@"; do
 	if [ -f "/usr/local/tce.installed/$pkg" ]; then
-		echo ":: Package '$pkg' already installed."
+		echo " :: Package '$pkg' already installed."
 		return
 	fi
 	UpdDeps "$pkg.tcz"
 done
 
-echo ":: Removing duplicates in dependency list"
+echo " :: Removing duplicates in dependency list"
 awk '!seen[$0]++' "$DEPSFILE" > "$DEPSFILE.tmp" && mv "$DEPSFILE.tmp" "$DEPSFILE"
 
 # reverse dep list (load deps first, target package last)
 sed '1!G;h;$!d' "$DEPSFILE" > "$DEPSFILE.tmp"
 mv "$DEPSFILE.tmp" "$DEPSFILE"
 
-echo ":: Downloading Packages"
+echo " :: Downloading Packages"
 total=$(wc -l < "$DEPSFILE" | tr -d ' ')
 i=1
 while IFS= read -r tcz; do
@@ -75,7 +75,7 @@ while IFS= read -r tcz; do
 done < "$DEPSFILE"
 
 echo
-echo ":: Installing Packages"
+echo " :: Installing Packages"
 
 # NOTE: we implemented our own tcz installer because tce-load -i is kinda quirky when it comes to installing packages
 #       one by one, so instead we just process it ourselves, but we still give our users the choice if LEGACY is set.
@@ -147,4 +147,4 @@ cp "$DEPSFILE" "$FLIGHTED"
 rm -f "$INSTALLFILE"
 
 echo
-echo ":: Done"
+echo " :: Done"
