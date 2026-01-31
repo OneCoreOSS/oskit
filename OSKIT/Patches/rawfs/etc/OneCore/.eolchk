@@ -10,6 +10,12 @@ TimestampToHuman() {
 
 EXPIRY_HUMANDATE=$(date -u -d "@$EOLDATE" +%d-%b-%Y | tr 'a-z' 'A-Z')
 
+if [ -f "/etc/OneCore/OneCoreNET%DOMAIN" ]; then
+	OCNET_DOMAIN="$(cat /etc/OneCore/OneCoreNET%DOMAIN)"
+else
+	OCNET_DOMAIN="onecore.compy.ca"
+fi
+
 if [ "$NOW" -gt "$EOLDATE" ]; then
 	echo
 	echo "=================== END OF LIFE WARNING ==================="
@@ -18,7 +24,7 @@ if [ "$NOW" -gt "$EOLDATE" ]; then
 	echo " security updates and support.                             "
 	echo
 	echo " Learn how to upgrade your system:                         "
-	echo "    https://onecore.l5.ca/articles/MigratingOCL           "
+	echo "    https://$OCNET_DOMAIN/articles/MigratingOCL            "
 	echo
 	echo "    OneCore Linux version $VER expired on $EXPIRY_HUMANDATE"
 	echo "==========================================================="
@@ -38,7 +44,7 @@ if [ "$NOW" -ge "$DAYS7" ]; then
 	echo "  recommended to upgrade to the latest version."
 	echo
 	echo "  Learn how to migrate to a newer release: "
-	echo "    https://onecore.l5.ca/articles/MigratingOCL"
+	echo "    https://$OCNET_DOMAIN/articles/MigratingOCL"
 	echo
 	echo "  REMINDER: Your OS will expire on  $EXPIRY_HUMANDATE"
 	echo
@@ -51,7 +57,7 @@ elif [ "$NOW" -ge "$DAYS30" ]; then
 	echo "  maintain access to updates and support."
 	echo
 	echo "  Learn how to migrate to a newer version:"
-	echo "    https://onecore.l5.ca/articles/MigratingOCL"
+	echo "    https://$OCNET_DOMAIN/articles/MigratingOCL"
 	echo
 	echo "  REMINDER: Your OS will expire on  $EXPIRY_HUMANDATE"
 	echo

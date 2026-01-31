@@ -1,0 +1,41 @@
+#!/bin/sh
+##################################################
+# ocdomainref utility by OneCore                 #
+# Utility to find first reachable OCNET domain.  #
+##################################################
+
+DOMAINS="
+onecore.compy.ca
+onecore.for.ca
+onecore.ca
+onecore.l5.ca
+"
+
+LOGDIR="/var/log/onecore/ocdomainref"
+DOMFILE="/etc/OneCore/OneCoreNET%DOMAIN"
+
+if [ ! -d "/etc/OneCore" ]; then
+	mkdir -p "/etc/OneCore"
+fi
+
+if [ ! -d "$LOGDIR" ]; then
+	mkdir -p "$LOGDIR"
+fi
+
+
+CheckDomain() {
+	DOMAIN="$1"
+	wget -q -T 3 -O /dev/null "http://$DOMAIN" >/dev/null 2>&1
+}
+
+for DOMAIN in $DOMAINS; do
+	if CheckDomain "$DOMAIN"; then
+		echo "$DOMAIN" > "$DOMFILE"
+		echo "[$(date '+%d-%m-%Y %H:%M')] SUCCESS: OneCoreNET domain set to '$DOMAIN'." >> "$LOGDIR/logs.txt"
+		exit 0
+	fi
+done
+
+echo "[$(date '+%d-%m-%Y %H:%M')] ERROR: No valid OneCoreNET domain could be found, registering a new Product Activation Key may not work." >> "$LOGDIR/logs.txt"
+
+exit 1

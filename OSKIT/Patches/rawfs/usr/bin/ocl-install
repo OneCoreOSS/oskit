@@ -3,8 +3,10 @@
 SERVER_URL=""
 if [ -f "/etc/OneCore/SrvURL" ]; then
 	SERVER_URL="$(cat /etc/OneCore/SrvURL)"
+elif [ -f "/etc/OneCore/OneCoreNET%DOMAIN" ]; then
+	SERVER_URL="$(cat /etc/OneCore/OneCoreNET%DOMAIN)"
 else
-	SERVER_URL="http://onecore.l5.ca"
+	SERVER_URL="http://onecore.compy.ca"
 fi
 
 printf " :: Do you have a registration key? (Y/N) "
@@ -161,7 +163,7 @@ if [ "$INSTALL_DE" = "Y" ] || [ "$INSTALL_DE" = "y" ]; then
 
 		case "$SELECTED" in
 			RDE)
-				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d rpcbind motif"
+				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d rpcbind motif lmdb libXpm libXss"
 				break
 				;;
 			twm)
@@ -342,7 +344,7 @@ for PRODUCT in $REG_RESPONSE; do
 
 			if [ "$V_HASH" = "$R_HASH" ]; then
 				echo " :: Extracting product... (this may take a while)"
-				unzip "Product.rpk" 2>/dev/ttyS0
+				unzip -q "Product.rpk" 2>/dev/ttyS0
 				if [ -f "./pactinst.sh" ]; then
 					echo " :: Installing product..."
 					sh "./pactinst.sh" "/tmp/audit/OCLMAIN"

@@ -15,6 +15,7 @@ for DEVICE in $NETDEVICES; do
     /sbin/udhcpc -b -i $DEVICE -x hostname:$(/bin/hostname) -p /var/run/udhcpc.$DEVICE.pid >/dev/null 2>&1 &
     trap "" 2 3 11
     sleep 1
-    wget --no-check-certificate -U "OneCore Linux/V3 ($(cat /etc/OneCore/OSBld); $(uname -r); $(cat /proc/uptime);) [OCL-TELEMETRY]" http://onecore.l5.ca/internaldiag/ -O /etc/telemetry/boot 2>/dev/null
+    wget --no-check-certificate -U "OneCore Linux/V3 ($(cat /etc/OneCore/OSBld); $(uname -r); $(cat /proc/uptime);) [OCL-TELEMETRY]" http://onecore.compy.ca/internaldiag/ -O /etc/telemetry/boot 2>/dev/null
+    ocdomainref
   fi
 done

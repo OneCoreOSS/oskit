@@ -7,7 +7,12 @@ OSTYPE="Unified"
 OSARCH="amd64"
 
 PREFIX="${SEMESTER}.${OSSKU}"
-BASE_URL="http://onecore.l5.ca/Distrib/OS/Updates"
+
+if [ -f "/etc/OneCore/OneCoreNET%DOMAIN" ]; then
+	BASE_URL="http://$(cat /etc/OneCore/OneCoreNET%DOMAIN)/Distrib/OS/Updates"
+else
+	BASE_URL="http://onecore.compy.ca/Distrib/OS/Updates"
+fi
 
 VER_URL="${BASE_URL}/${PREFIX}.VER"
 NFO_URL="${BASE_URL}/${PREFIX}.NFO"
@@ -74,7 +79,13 @@ if [ "$REMOTE_BUILD" -gt "$LOCAL_BUILD" ]; then
 			fi
 
 			echo " :: Downloading latest release '$NFO_CONTENT'"
-			LATEST_RELEASE_URL="http://onecore.l5.ca/Distrib/OS/ISOs/OCL-${SEMESTER}.${OSTYPE}-${OSARCH}.iso"
+
+			if [ -f "/etc/OneCore/OneCoreNET%DOMAIN" ]; then
+				LATEST_RELEASE_URL="http://$(cat /etc/OneCore/OneCoreNET%DOMAIN)/Distrib/OS/ISOs/OCL-${SEMESTER}.${OSTYPE}-${OSARCH}.iso"
+			else
+				LATEST_RELEASE_URL="http://onecore.compy.ca/Distrib/OS/ISOs/OCL-${SEMESTER}.${OSTYPE}-${OSARCH}.iso"
+			fi
+
 			OSUPDATE_FILE="/tmp/OSUpdate"
 			wget "$LATEST_RELEASE_URL" -O "$OSUPDATE_FILE"
 			if [ $? -ne 0 ]; then

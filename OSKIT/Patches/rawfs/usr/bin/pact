@@ -3,8 +3,10 @@
 SERVER_URL=""
 if [ -f "/etc/OneCore/SrvURL" ]; then
 	SERVER_URL="$(cat /etc/OneCore/SrvURL)"
+elif [ -f "/etc/OneCore/OneCoreNET%DOMAIN" ]; then
+	SERVER_URL="$(cat /etc/OneCore/OneCoreNET%DOMAIN)"
 else
-	SERVER_URL="http://onecore.l5.ca"
+	SERVER_URL="http://onecore.compy.ca"
 fi
 
 if [ -f "$HOME/.OneCore/PactKey" ]; then
@@ -63,7 +65,7 @@ PactInstall(){
 
 			if [ "$V_HASH" = "$R_HASH" ]; then
 				echo " :: Extracting product... (this may take a while)"
-				sudo unzip "Product.rpk" 2>/dev/ttyS0
+				sudo unzip -q "Product.rpk" 2>/dev/ttyS0
 				if [ -f "./pactinst.sh" ]; then
 					sudo mkdir -p "/tmp/audit/OCLMAIN/PostSetup"
 					if [ -f "/tmp/audit/OCLMAIN/PostSetup/.BootSetup" ]; then
@@ -125,7 +127,6 @@ case "$1" in
 		echo " :: Verifying registration key..."
 
 		# Try to download content directly into a variable #
-		echo "[DEBUG] $FILE_URL is the URL."
 		FILE_URL="$SERVER_URL/NET/Registrations/OCL/${REG_KEY}.rp"
 		REG_RESPONSE="$(wget -UOneCoreNET/OneCoreLinuxV3 -qO - "$FILE_URL")"
 		if [ $? -eq 0 ] && [ -n "$REG_RESPONSE" ]; then
