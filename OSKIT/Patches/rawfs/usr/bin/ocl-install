@@ -153,6 +153,10 @@ if [ "$INSTALL_DE" = "Y" ] || [ "$INSTALL_DE" = "y" ]; then
 
 	echo "        $COUNT. fluxbox"
 	OPTIONS="$OPTIONS fluxbox"
+	COUNT=$((COUNT+1))
+
+	echo "        $COUNT. weston (Wayland)"
+	OPTIONS="$OPTIONS weston"
 
 	echo
 	while true; do
@@ -180,6 +184,10 @@ if [ "$INSTALL_DE" = "Y" ] || [ "$INSTALL_DE" = "y" ]; then
 				;;
 			fluxbox)
 				TCZ_TOINSTALL="$TCZ_TOINSTALL Xfbdev Xorg-7.7-3d fluxbox"
+				break
+				;;
+			weston)
+				TCZ_TOINSTALL="$TCZ_TOINSTALL weston seatd"
 				break
 				;;
 			*)

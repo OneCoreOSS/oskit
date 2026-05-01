@@ -30,11 +30,45 @@ fi
 
 TERMTYPE=`/usr/bin/tty`
 
+XDG_RUNTIME_DIR="$HOME/.xdgrt"
+export XDG_RUNTIME_DIR
+
+mkdir -p "$XDG_RUNTIME_DIR"
+
 echo "    Welcome to OneCore Linux 2025 !"
 echo
 
 if [ -f "/etc/OneCore/.eolchk" ]; then
 	sh "/etc/OneCore/.eolchk"
+fi
+
+if [ -f "/usr/local/bin/weston" ]; then
+	echo "******************************************************"
+	echo "**"
+	echo "**   1. RUN the weston Wayland compositor"
+	echo "**"
+	echo "**   2. CONTINUE loading user profile"
+	echo "**"
+	echo "******************************************************"
+	echo
+	while true; do
+		read -p "[1/2]  % " choice
+		case $choice in
+			1)
+				clear
+				echo
+				echo "        Launching weston..."
+				seatd -u oc > "$HOME/.seatd_logs" 2>&1 &
+				weston
+				;;
+			2)
+				break
+				;;
+			*)
+				echo
+				;;
+		esac
+	done
 fi
 
 if [ -f "/usr/dt/bin/dtlogin" ]; then

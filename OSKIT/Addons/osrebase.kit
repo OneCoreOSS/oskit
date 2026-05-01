@@ -6,7 +6,8 @@
 URL="http://tinycorelinux.net"
 
 declare -A VALIDTCL=(
-    ["latest"]="16.x"
+    ["latest"]="17.x"
+    ["TCL17"]="17.x"
     ["TCL16"]="16.x"
     ["TCL15"]="15.x"
     ["TCL14"]="14.x"
@@ -42,6 +43,13 @@ if [[ -v "VALIDTCL[$1]" ]]; then
 	echo " :: Replacing TinyCore kernel modules with OneCore kernel modules"
 	sudo rm -rf "$OSK_ROOT/BUILD/ONECORE/lib/modules/"
 	sudo cp -r "$OSK_ROOT/OSK_DEPS/X86_64.BIN/Linux/Kernel.bin/lib/modules" "$OSK_ROOT/BUILD/ONECORE/lib/modules"
+
+	echo " :: Decompressing kernel modules (Requires root)"
+	find "$OSK_ROOT/BUILD/ONECORE/lib/modules" -type f -name "*.ko.zst" -print0 | while IFS= read -r -d '' ZST_FILE; do
+		OUTPUT_FILE="${ZST_FILE%.zst}"
+		sudo zstd -d -f "$ZST_FILE" -o "$OUTPUT_FILE"
+	done
+
 	echo " :: Registering Mainline SKU"
 	mkdir -p "$OSK_ROOT/SKUS"
 	mkdir -p "$OSK_ROOT/SKUS/SKUNames"

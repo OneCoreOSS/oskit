@@ -6,7 +6,7 @@
 useBusybox
 checknotroot
 PROG_NAME=$(basename $0)
-KERNELVER="6.12.11-tinycore64"
+KERNELVER="6.18.2-tinycore64"
 unset WGET INSTALL COPYINSTALL BOOTING ONDEMAND DOWNLOAD_ONLY LOAD_ONLY SUPPRESS
 FORCE="n"  # Overwrite system files default to no. Use -f to force overwrite.
 SAVED_DIR=`pwd`

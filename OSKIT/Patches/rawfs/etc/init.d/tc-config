@@ -712,7 +712,10 @@ if [ -n "$ONECORE_PART" ]; then
 		sleep 10 # yes this sucks but we must wait for network to initializate (because we boot too quickly)
 		mv /sbin/reboot /sbin/reboot.bin
 		cd "/mnt/$ONECORE_PART/PostSetup/"
-		sudo -u "$USER" sh "/mnt/$ONECORE_PART/PostSetup/.BootSetup" "/mnt/$ONECORE_PART/PostSetup" >/dev/ttyS0
+		until sudo -u "$USER" sh "/mnt/$ONECORE_PART/PostSetup/.BootSetup" "/mnt/$ONECORE_PART/PostSetup" >/dev/ttyS0; do
+			echo " !! BootSetup failed, retrying." >/dev/ttyS0
+			sleep 1
+		done
 		mv /sbin/reboot.bin /sbin/reboot
 		cd "/"
 		rm -rf "/mnt/$ONECORE_PART/PostSetup"

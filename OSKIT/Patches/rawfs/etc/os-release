@@ -1,10 +1,10 @@
 NAME=OneCore
-VERSION="16.0"
+VERSION="17.0"
 ID=onecorelinux
-VERSION_ID=16.0
+VERSION_ID=17.0
 PRETTY_NAME="OneCore Linux V3.0"
 ANSI_COLOR="0;34"
-CPE_NAME="cpe:/o:tinycore:tinycore_linux:16.0"
+CPE_NAME="cpe:/o:tinycore:tinycore_linux:17.0"
 HOME_URL="http://tinycorelinux.net/"
 SUPPORT_URL="http://forum.tinycorelinux.net/"
 BUG_REPORT_URL="http://forum.tinycorelinux.net/"
